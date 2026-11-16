@@ -7,29 +7,6 @@ import { apiErrorMessage, FILE_ACCEPT } from "../../lib/format";
 import { Button } from "../ui/Button";
 import { Sheet } from "../ui/Sheet";
 
-async function readAudioDurationMs(file: File): Promise<number | undefined> {
-  if (!file.type.startsWith("audio/")) {
-    return undefined;
-  }
-  const objectUrl = URL.createObjectURL(file);
-  try {
-    const duration = await new Promise<number>((resolve, reject) => {
-      const audio = new Audio();
-      audio.preload = "metadata";
-      audio.onloadedmetadata = () => {
-        resolve(Number.isFinite(audio.duration) ? Math.round(audio.duration * 1000) : 0);
-      };
-      audio.onerror = () => reject(new Error("metadata"));
-      audio.src = objectUrl;
-    });
-    return duration > 0 ? duration : undefined;
-  } catch {
-    return undefined;
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
-}
-
 type UploadItem = {
   id: string;
   name: string;
@@ -83,14 +60,12 @@ export function UploadSheet({
       const file = files[index]!;
       const id = `${index}-${file.name}`;
       try {
-        const durationMs = await readAudioDurationMs(file);
         await getApiClient().uploadFile({
           sessionId,
           topicId,
           file,
           fileName: file.name,
           mimeType: file.type || undefined,
-          durationMs,
           onProgress: (progress) => {
             setItems((current) =>
               current.map((item) => (item.id === id ? { ...item, progress } : item)),

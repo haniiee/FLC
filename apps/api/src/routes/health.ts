@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { HealthResponse } from "@app/shared-types";
 import { sql } from "../db/index";
+import { checkFfmpeg } from "../media/process-audio";
 import { checkStorage } from "../storage";
 
 async function checkDb(): Promise<"ok" | "down"> {
@@ -14,12 +15,17 @@ async function checkDb(): Promise<"ok" | "down"> {
 
 export const healthRoutes: FastifyPluginAsync = async (app) => {
   app.get("/health", async (): Promise<HealthResponse> => {
-    const [dbStatus, storageStatus] = await Promise.all([checkDb(), checkStorage()]);
+    const [dbStatus, storageStatus, ffmpegStatus] = await Promise.all([
+      checkDb(),
+      checkStorage(),
+      checkFfmpeg(),
+    ]);
 
     return {
       status: "ok",
       db: dbStatus,
       storage: storageStatus,
+      ffmpeg: ffmpegStatus,
     };
   });
 };

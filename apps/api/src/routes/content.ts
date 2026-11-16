@@ -37,6 +37,7 @@ import {
   getTopicDetail,
   getTopicOrThrow,
   listSessions,
+  reprocessFile,
   updateFileTitle,
   updateSessionTitle,
   updateTopicTitle,
@@ -225,6 +226,7 @@ export const contentRoutes: FastifyPluginAsync = async (rawApp) => {
         mimeType: request.body.mimeType,
         sizeBytes: request.body.sizeBytes,
         fileName: request.body.fileName,
+        source: request.body.source,
       });
     },
   );
@@ -235,13 +237,32 @@ export const contentRoutes: FastifyPluginAsync = async (rawApp) => {
       schema: {
         params: IdParams,
         body: CompleteFileBodySchema,
-        response: { 200: FileSchema },
+        response: { 200: FileSchema, 202: FileSchema },
       },
     },
-    async (request) => {
+    async (request, reply) => {
       const file = await getFileOrThrow(request.params.id);
       await requireGroupRole(app, request, file.groupId, ["teacher", "assistant"]);
-      return completeFileUpload(file.id, request.body.durationMs);
+      // durationMs from client is ignored; ffprobe is source of truth.
+      void request.body.durationMs;
+      const result = await completeFileUpload(file.id);
+      return reply.status(result.httpStatus).send(result.file);
+    },
+  );
+
+  app.post(
+    "/files/:id/reprocess",
+    {
+      schema: {
+        params: IdParams,
+        response: { 202: FileSchema },
+      },
+    },
+    async (request, reply) => {
+      const file = await getFileOrThrow(request.params.id);
+      await requireGroupRole(app, request, file.groupId, ["teacher", "assistant"]);
+      const result = await reprocessFile(file.id);
+      return reply.status(202).send(result.file);
     },
   );
 

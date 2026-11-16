@@ -6,8 +6,10 @@ import { toFileDto, toSessionSummary, toTopicSummary, visibleFiles } from "../li
 import { fileDisplayName, topicDisplayName } from "../lib/display-name";
 import { AppError, badRequest, notFound } from "../lib/errors";
 import { nextFileNumber, nextSessionNumber, nextTopicNumber } from "../lib/numbering";
+import { scheduleProcessAudio } from "../media/process-audio";
 import {
   assertSizeAllowed,
+  baseMime,
   buildStorageKey,
   createDownloadUrl,
   createUploadUrl,
@@ -274,10 +276,13 @@ export async function createUploadUrlForFile(input: {
   mimeType: string;
   sizeBytes: number;
   fileName: string;
+  source?: "upload" | "recording";
 }) {
-  const kind = mimeToKind(input.mimeType);
+  const source = input.source ?? "upload";
+  const kind = mimeToKind(input.mimeType, source);
   assertSizeAllowed(kind, input.sizeBytes);
   const { session, topic } = await resolveSessionAndTopic(input.sessionId, input.topicId);
+  const storedMime = baseMime(input.mimeType);
 
   const file = await db.transaction(async (tx) => {
     const number = await nextFileNumber(tx, {
@@ -296,9 +301,10 @@ export async function createUploadUrlForFile(input: {
         number,
         title: null,
         storageKey: null,
-        mimeType: input.mimeType.toLowerCase(),
+        mimeType: storedMime,
         sizeBytes: input.sizeBytes,
         status: "pending",
+        source,
         uploadedBy: input.userId,
       })
       .returning();
@@ -307,7 +313,7 @@ export async function createUploadUrlForFile(input: {
       throw badRequest("FILE_CREATE_FAILED", "ساخت فایل ناموفق بود");
     }
 
-    const ext = extensionForMime(input.mimeType, kind);
+    const ext = extensionForMime(storedMime, kind);
     const storageKey = buildStorageKey(session.groupId, created.id, ext);
 
     const [updated] = await tx
@@ -327,10 +333,12 @@ export async function createUploadUrlForFile(input: {
   };
 }
 
-export async function completeFileUpload(
-  fileId: string,
-  durationMs?: number,
-): Promise<ReturnType<typeof toFileDto>> {
+export type CompleteFileResult = {
+  file: ReturnType<typeof toFileDto>;
+  httpStatus: 200 | 202;
+};
+
+export async function completeFileUpload(fileId: string): Promise<CompleteFileResult> {
   const file = await db.query.files.findFirst({ where: eq(files.id, fileId) });
   if (!file) {
     throw notFound("FILE_NOT_FOUND", "فایل پیدا نشد");
@@ -352,11 +360,29 @@ export async function completeFileUpload(
       throw badRequest("FILE_SIZE_MISMATCH", "حجم فایل آپلودشده با مقدار اعلامی مطابقت ندارد");
     }
 
+    if (file.kind === "audio") {
+      const [processing] = await db
+        .update(files)
+        .set({
+          status: "processing",
+          processingError: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(files.id, fileId))
+        .returning();
+
+      if (!processing) {
+        throw notFound("FILE_NOT_FOUND", "فایل پیدا نشد");
+      }
+
+      scheduleProcessAudio(fileId);
+      return { file: toFileDto(processing), httpStatus: 202 };
+    }
+
     const [ready] = await db
       .update(files)
       .set({
         status: "ready",
-        durationMs: durationMs ?? file.durationMs,
         updatedAt: new Date(),
       })
       .where(eq(files.id, fileId))
@@ -365,7 +391,7 @@ export async function completeFileUpload(
     if (!ready) {
       throw notFound("FILE_NOT_FOUND", "فایل پیدا نشد");
     }
-    return toFileDto(ready);
+    return { file: toFileDto(ready), httpStatus: 200 };
   } catch (error) {
     if (error instanceof AppError) {
       throw error;
@@ -378,6 +404,39 @@ export async function completeFileUpload(
 
     throw badRequest("FILE_NOT_UPLOADED", "فایل در ذخیره‌سازی پیدا نشد");
   }
+}
+
+export async function reprocessFile(fileId: string): Promise<CompleteFileResult> {
+  const file = await db.query.files.findFirst({ where: eq(files.id, fileId) });
+  if (!file) {
+    throw notFound("FILE_NOT_FOUND", "فایل پیدا نشد");
+  }
+  if (file.kind !== "audio") {
+    throw badRequest("NOT_AUDIO", "فقط فایل صوتی قابل پردازش مجدد است");
+  }
+  if (file.status !== "failed") {
+    throw badRequest("NOT_FAILED", "فقط فایل‌های failed قابل پردازش مجدد هستند");
+  }
+  if (!file.storageKey) {
+    throw badRequest("FILE_NO_STORAGE", "فایل ذخیره‌سازی ندارد");
+  }
+
+  const [processing] = await db
+    .update(files)
+    .set({
+      status: "processing",
+      processingError: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(files.id, fileId))
+    .returning();
+
+  if (!processing) {
+    throw notFound("FILE_NOT_FOUND", "فایل پیدا نشد");
+  }
+
+  scheduleProcessAudio(fileId);
+  return { file: toFileDto(processing), httpStatus: 202 };
 }
 
 export async function createTextFile(input: {

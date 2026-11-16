@@ -106,7 +106,7 @@ export type UploadFileInput = {
   file: Blob;
   fileName?: string;
   mimeType?: string;
-  durationMs?: number;
+  source?: "upload" | "recording";
   onProgress?: (progress: number) => void;
 };
 
@@ -144,6 +144,7 @@ export type ApiClient = {
   deleteTopic: (id: string) => Promise<OkResponse>;
   createUploadUrl: (body: UploadUrlBody) => Promise<UploadUrlResponse>;
   completeFile: (id: string, body?: CompleteFileBody) => Promise<FileDto>;
+  reprocessFile: (id: string) => Promise<FileDto>;
   createTextFile: (body: CreateTextFileBody) => Promise<FileDto>;
   getFileUrl: (id: string, download?: boolean) => Promise<FileUrlResponse>;
   updateFile: (id: string, body: UpdateTitleBody) => Promise<FileDto>;
@@ -446,6 +447,7 @@ export function createApiClient(baseUrl: string, options: ApiClientOptions = {})
       CompleteFileBodySchema.parse(body);
       return request(`/files/${id}/complete`, FileSchema, { method: "POST", body });
     },
+    reprocessFile: (id) => request(`/files/${id}/reprocess`, FileSchema, { method: "POST" }),
     createTextFile: (body) => {
       CreateTextFileBodySchema.parse(body);
       return request("/files/text", FileSchema, { method: "POST", body });
@@ -468,12 +470,11 @@ export function createApiClient(baseUrl: string, options: ApiClientOptions = {})
         mimeType,
         sizeBytes: input.file.size,
         fileName,
+        source: input.source,
       });
 
       await putWithProgress(prepared.uploadUrl, input.file, mimeType, input.onProgress);
-      return client.completeFile(prepared.file.id, {
-        durationMs: input.durationMs,
-      });
+      return client.completeFile(prepared.file.id, {});
     },
   };
 

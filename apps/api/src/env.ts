@@ -17,6 +17,8 @@ const envSchema = z.object({
   API_PORT: z.coerce.number().int().positive().default(4000),
   JWT_SECRET: z.string().min(16, "JWT_SECRET must be at least 16 characters"),
   WEB_URL: z.string().url("WEB_URL must be a valid URL"),
+  FFMPEG_PATH: z.string().min(1).default("ffmpeg"),
+  FFPROBE_PATH: z.string().min(1).default("ffprobe"),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -118,26 +118,28 @@ describe("sessions topics files", () => {
       })
     ).json();
 
-    const bytes = Buffer.from("ID3fake-mp3-content-for-test-0001");
+    // Non-audio stays ready immediately (audio goes through processing queue).
+    const bytes = Buffer.from("%PDF-1.4 fake-pdf-content-for-test-0001");
     const upload = await app.inject({
       method: "POST",
       url: "/files/upload-url",
       headers: authHeader(teacher.accessToken),
       payload: {
         sessionId: session.id,
-        mimeType: "audio/mpeg",
+        mimeType: "application/pdf",
         sizeBytes: bytes.length,
-        fileName: "sample.mp3",
+        fileName: "sample.pdf",
       },
     });
     expect(upload.statusCode).toBe(200);
     const uploadBody = upload.json();
     expect(uploadBody.file.status).toBe("pending");
-    expect(uploadBody.file.displayName).toBe("Voice 1");
+    expect(uploadBody.file.displayName).toBe("PDF 1");
+    expect(uploadBody.file.source).toBe("upload");
 
     const put = await fetch(uploadBody.uploadUrl, {
       method: "PUT",
-      headers: { "content-type": "audio/mpeg" },
+      headers: { "content-type": "application/pdf" },
       body: bytes,
     });
     expect(put.ok).toBe(true);
@@ -146,7 +148,7 @@ describe("sessions topics files", () => {
       method: "POST",
       url: `/files/${uploadBody.file.id}/complete`,
       headers: authHeader(teacher.accessToken),
-      payload: { durationMs: 1200 },
+      payload: {},
     });
     expect(complete.statusCode).toBe(200);
     expect(complete.json().status).toBe("ready");
@@ -159,6 +161,35 @@ describe("sessions topics files", () => {
     expect(urlRes.statusCode).toBe(200);
     const downloaded = Buffer.from(await (await fetch(urlRes.json().url)).arrayBuffer());
     expect(downloaded.equals(bytes)).toBe(true);
+
+    // Audio complete returns 202 + processing
+    const audioBytes = Buffer.from("ID3fake-mp3-content-for-test-0001");
+    const audioUpload = await app.inject({
+      method: "POST",
+      url: "/files/upload-url",
+      headers: authHeader(teacher.accessToken),
+      payload: {
+        sessionId: session.id,
+        mimeType: "audio/mpeg",
+        sizeBytes: audioBytes.length,
+        fileName: "sample.mp3",
+      },
+    });
+    expect(audioUpload.statusCode).toBe(200);
+    expect(audioUpload.json().file.displayName).toBe("Voice 1");
+    await fetch(audioUpload.json().uploadUrl, {
+      method: "PUT",
+      headers: { "content-type": "audio/mpeg" },
+      body: audioBytes,
+    });
+    const audioComplete = await app.inject({
+      method: "POST",
+      url: `/files/${audioUpload.json().file.id}/complete`,
+      headers: authHeader(teacher.accessToken),
+      payload: { durationMs: 1200 },
+    });
+    expect(audioComplete.statusCode).toBe(202);
+    expect(audioComplete.json().status).toBe("processing");
   });
 
   it("rejects invalid mime, oversized files, and incomplete uploads", async () => {
@@ -269,12 +300,28 @@ describe("sessions topics files", () => {
         headers: { "content-type": "audio/mpeg" },
         body: bytes,
       });
-      await app.inject({
+      const complete = await app.inject({
         method: "POST",
         url: `/files/${upload.file.id}/complete`,
         headers: authHeader(teacher.accessToken),
         payload: {},
       });
+      expect(complete.statusCode).toBe(202);
+      // Wait for async media job to finish, then force ready for ordering tests.
+      const start = Date.now();
+      while (Date.now() - start < 15_000) {
+        const row = await db.query.files.findFirst({
+          where: eq(schema.files.id, upload.file.id),
+        });
+        if (row && row.status !== "processing" && row.status !== "pending") {
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      await db
+        .update(schema.files)
+        .set({ status: "ready", durationMs: 1000, processingError: null, updatedAt: new Date() })
+        .where(eq(schema.files.id, upload.file.id));
       return upload.file.id as string;
     }
 
@@ -393,12 +440,25 @@ describe("sessions topics files", () => {
       headers: { "content-type": "audio/mpeg" },
       body: bytes,
     });
-    await app.inject({
+    const complete = await app.inject({
       method: "POST",
       url: `/files/${upload.file.id}/complete`,
       headers: authHeader(teacher.accessToken),
       payload: {},
     });
+    expect(complete.statusCode).toBe(202);
+    const start = Date.now();
+    while (Date.now() - start < 15_000) {
+      const row = await db.query.files.findFirst({ where: eq(schema.files.id, upload.file.id) });
+      if (row && row.status !== "processing" && row.status !== "pending") {
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    await db
+      .update(schema.files)
+      .set({ status: "ready", processingError: null, updatedAt: new Date() })
+      .where(eq(schema.files.id, upload.file.id));
 
     const file = await db.query.files.findFirst({ where: eq(schema.files.id, upload.file.id) });
     expect(file?.storageKey).toBeTruthy();

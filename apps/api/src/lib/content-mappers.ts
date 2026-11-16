@@ -46,8 +46,9 @@ export function toFileDto(file: FileRow, options?: { includeText?: boolean }): F
     sizeBytes: file.sizeBytes,
     durationMs: file.durationMs,
     ...(file.kind === "text" || options?.includeText ? { textContent: file.textContent } : {}),
-
     status: file.status as FileStatus,
+    processingError: file.processingError,
+    source: file.source,
     uploadedBy: file.uploadedBy,
     createdAt: file.createdAt.toISOString(),
     updatedAt: file.updatedAt.toISOString(),

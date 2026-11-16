@@ -3,8 +3,11 @@ import { z } from "zod";
 export const FileKindSchema = z.enum(["audio", "pdf", "image", "video", "text"]);
 export type FileKind = z.infer<typeof FileKindSchema>;
 
-export const FileStatusSchema = z.enum(["pending", "ready", "failed"]);
+export const FileStatusSchema = z.enum(["pending", "processing", "ready", "failed"]);
 export type FileStatus = z.infer<typeof FileStatusSchema>;
+
+export const FileSourceSchema = z.enum(["upload", "recording"]);
+export type FileSource = z.infer<typeof FileSourceSchema>;
 
 export const CreateSessionBodySchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -35,6 +38,8 @@ export const FileSchema = z.object({
   durationMs: z.number().int().nonnegative().nullable(),
   textContent: z.string().nullable().optional(),
   status: FileStatusSchema,
+  processingError: z.string().nullable().optional(),
+  source: FileSourceSchema,
   uploadedBy: z.string().uuid(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -94,6 +99,7 @@ export const UploadUrlBodySchema = z.object({
   mimeType: z.string().min(1),
   sizeBytes: z.number().int().positive(),
   fileName: z.string().min(1).max(255),
+  source: FileSourceSchema.optional(),
 });
 export type UploadUrlBody = z.infer<typeof UploadUrlBodySchema>;
 

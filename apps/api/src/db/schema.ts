@@ -15,7 +15,8 @@ import {
 export const platformRoleEnum = pgEnum("platform_role", ["teacher", "user"]);
 export const groupRoleEnum = pgEnum("group_role", ["teacher", "assistant", "student"]);
 export const fileKindEnum = pgEnum("file_kind", ["audio", "pdf", "image", "video", "text"]);
-export const fileStatusEnum = pgEnum("file_status", ["pending", "ready", "failed"]);
+export const fileStatusEnum = pgEnum("file_status", ["pending", "processing", "ready", "failed"]);
+export const fileSourceEnum = pgEnum("file_source", ["upload", "recording"]);
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -134,6 +135,8 @@ export const files = pgTable(
     durationMs: integer("duration_ms"),
     textContent: text("text_content"),
     status: fileStatusEnum("status").notNull().default("pending"),
+    processingError: text("processing_error"),
+    source: fileSourceEnum("source").notNull().default("upload"),
     uploadedBy: uuid("uploaded_by")
       .notNull()
       .references(() => users.id),

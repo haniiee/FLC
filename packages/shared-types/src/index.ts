@@ -57,6 +57,8 @@ export {
   type FileKind,
   FileStatusSchema,
   type FileStatus,
+  FileSourceSchema,
+  type FileSource,
   CreateSessionBodySchema,
   type CreateSessionBody,
   UpdateTitleBodySchema,

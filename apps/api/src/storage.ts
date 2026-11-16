@@ -52,6 +52,14 @@ const AUDIO_MIMES = new Set([
   "audio/x-wav",
 ]);
 
+const RECORDING_AUDIO_MIMES = new Set([
+  "audio/webm",
+  "audio/ogg",
+  "audio/mp4",
+  "audio/aac",
+  "audio/mpeg",
+]);
+
 const IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/webp", "image/heic"]);
 const VIDEO_MIMES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
 
@@ -62,8 +70,22 @@ const SIZE_LIMITS: Record<Exclude<FileKind, "text">, number> = {
   video: 500 * 1024 * 1024,
 };
 
-export function mimeToKind(mimeType: string): Exclude<FileKind, "text"> {
-  const mime = mimeType.toLowerCase();
+/** Strip parameters like `;codecs=opus` from Content-Type. */
+export function baseMime(mimeType: string): string {
+  return mimeType.split(";")[0]!.trim().toLowerCase();
+}
+
+export function mimeToKind(
+  mimeType: string,
+  source: "upload" | "recording" = "upload",
+): Exclude<FileKind, "text"> {
+  const mime = baseMime(mimeType);
+  if (source === "recording") {
+    if (RECORDING_AUDIO_MIMES.has(mime)) {
+      return "audio";
+    }
+    throw badRequest("INVALID_MIME", "نوع فایل ضبط مجاز نیست");
+  }
   if (AUDIO_MIMES.has(mime)) {
     return "audio";
   }
@@ -90,7 +112,7 @@ export function assertSizeAllowed(kind: Exclude<FileKind, "text">, sizeBytes: nu
 }
 
 export function extensionForMime(mimeType: string, kind: FileKind): string {
-  const mime = mimeType.toLowerCase();
+  const mime = baseMime(mimeType);
   const map: Record<string, string> = {
     "audio/mpeg": "mp3",
     "audio/mp4": "m4a",
@@ -148,6 +170,31 @@ export async function headObject(key: string) {
     new HeadObjectCommand({
       Bucket: env.S3_BUCKET,
       Key: key,
+    }),
+  );
+}
+
+export async function downloadObjectStream(key: string) {
+  const result = await s3.send(
+    new GetObjectCommand({
+      Bucket: env.S3_BUCKET,
+      Key: key,
+    }),
+  );
+  return result.Body ?? null;
+}
+
+export async function putObjectFromFile(key: string, filePath: string, contentType: string) {
+  const { createReadStream } = await import("node:fs");
+  const { stat } = await import("node:fs/promises");
+  const fileStat = await stat(filePath);
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: env.S3_BUCKET,
+      Key: key,
+      Body: createReadStream(filePath),
+      ContentType: contentType,
+      ContentLength: fileStat.size,
     }),
   );
 }

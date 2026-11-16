@@ -13,6 +13,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:seed-teacher": "tsx src/scripts/seed-teacher.ts",
+    "backfill:durations": "tsx src/scripts/backfill-durations.ts",
     "test": "vitest run",
     "storage:cors": "tsx src/scripts/storage-cors.ts"
   },
