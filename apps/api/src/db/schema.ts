@@ -1,6 +1,8 @@
 import { relations, sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   bigint,
+  index,
   integer,
   pgEnum,
   pgTable,
@@ -17,6 +19,8 @@ export const groupRoleEnum = pgEnum("group_role", ["teacher", "assistant", "stud
 export const fileKindEnum = pgEnum("file_kind", ["audio", "pdf", "image", "video", "text"]);
 export const fileStatusEnum = pgEnum("file_status", ["pending", "processing", "ready", "failed"]);
 export const fileSourceEnum = pgEnum("file_source", ["upload", "recording"]);
+export const chatChannelKindEnum = pgEnum("chat_channel_kind", ["all", "students"]);
+export const chatMessageTypeEnum = pgEnum("chat_message_type", ["text", "voice"]);
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -243,6 +247,73 @@ export const filesRelations = relations(files, ({ one }) => ({
   }),
 }));
 
+export const chatChannels = pgTable(
+  "chat_channels",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    kind: chatChannelKindEnum("kind").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [unique("chat_channels_group_kind_uq").on(table.groupId, table.kind)],
+);
+
+export const chatMessages = pgTable(
+  "chat_messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    channelId: uuid("channel_id")
+      .notNull()
+      .references(() => chatChannels.id, { onDelete: "cascade" }),
+    senderId: uuid("sender_id")
+      .notNull()
+      .references(() => users.id),
+    type: chatMessageTypeEnum("type").notNull(),
+    text: text("text"),
+    storageKey: text("storage_key"),
+    mimeType: text("mime_type"),
+    sizeBytes: bigint("size_bytes", { mode: "number" }),
+    durationMs: integer("duration_ms"),
+    status: fileStatusEnum("status").notNull().default("pending"),
+    processingError: text("processing_error"),
+    replyToId: uuid("reply_to_id").references((): AnyPgColumn => chatMessages.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("chat_messages_channel_created_id_idx").on(
+      table.channelId,
+      sql`${table.createdAt} DESC`,
+      table.id,
+    ),
+  ],
+);
+
+export const chatChannelsRelations = relations(chatChannels, ({ one, many }) => ({
+  group: one(groups, {
+    fields: [chatChannels.groupId],
+    references: [groups.id],
+  }),
+  messages: many(chatMessages),
+}));
+
+export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
+  channel: one(chatChannels, {
+    fields: [chatMessages.channelId],
+    references: [chatChannels.id],
+  }),
+  sender: one(users, {
+    fields: [chatMessages.senderId],
+    references: [users.id],
+  }),
+  replyTo: one(chatMessages, {
+    fields: [chatMessages.replyToId],
+    references: [chatMessages.id],
+  }),
+}));
+
 export type User = typeof users.$inferSelect;
 export type Group = typeof groups.$inferSelect;
 export type GroupMember = typeof groupMembers.$inferSelect;
@@ -251,3 +322,5 @@ export type RefreshToken = typeof refreshTokens.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type Topic = typeof topics.$inferSelect;
 export type FileRow = typeof files.$inferSelect;
+export type ChatChannelRow = typeof chatChannels.$inferSelect;
+export type ChatMessageRow = typeof chatMessages.$inferSelect;

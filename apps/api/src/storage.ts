@@ -140,6 +140,31 @@ export function buildStorageKey(groupId: string, fileId: string, ext: string): s
   return `groups/${groupId}/files/${fileId}/original.${ext}`;
 }
 
+export const CHAT_VOICE_MAX_BYTES = 20 * 1024 * 1024;
+
+export function buildChatVoiceStorageKey(
+  groupId: string,
+  channelId: string,
+  messageId: string,
+  ext: string,
+): string {
+  return `groups/${groupId}/chats/${channelId}/${messageId}/original.${ext}`;
+}
+
+/** Chat voice notes: recording mimes only, max 20MB. */
+export function assertChatVoiceAllowed(mimeType: string, sizeBytes: number): void {
+  mimeToKind(mimeType, "recording");
+  if (sizeBytes <= 0) {
+    throw badRequest("INVALID_SIZE", "حجم فایل نامعتبر است");
+  }
+  if (sizeBytes > CHAT_VOICE_MAX_BYTES) {
+    throw payloadTooLarge(
+      "FILE_TOO_LARGE",
+      `حجم فایل بیش از حد مجاز است (${CHAT_VOICE_MAX_BYTES} بایت)`,
+    );
+  }
+}
+
 export async function createUploadUrl(key: string, mimeType: string, expiresIn = 900) {
   const command = new PutObjectCommand({
     Bucket: env.S3_BUCKET,

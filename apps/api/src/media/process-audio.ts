@@ -5,13 +5,16 @@ import { basename, extname, join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
 import { and, eq } from "drizzle-orm";
+import type { ChatMessage, GroupRole } from "@app/shared-types";
 import { db } from "../db";
-import { files } from "../db/schema";
+import { chatChannels, chatMessages, files, groupMembers, users } from "../db/schema";
 import { env } from "../env";
+import { toChatMessageDto } from "../lib/chat-mappers";
+import { emitMessageNew, emitMessageUpdated } from "../realtime";
 import { deleteStorageKeys, downloadObjectStream, headObject, putObjectFromFile } from "../storage";
 import { needsTranscode } from "./codecs";
-import { probe } from "./ffprobe";
-import { enqueueProcessAudio } from "./queue";
+import { ensureDurationMs, probe } from "./ffprobe";
+import { enqueueProcessAudio, type AudioJobTarget } from "./queue";
 import { toAacM4a } from "./transcode";
 
 function shortError(error: unknown): string {
@@ -27,40 +30,224 @@ function replaceExtension(storageKey: string, ext: string): string {
   return `${dir}${stem}.${cleaned}`;
 }
 
-async function markFailed(fileId: string, error: unknown): Promise<void> {
-  console.error(`[media] processAudio failed fileId=${fileId}`, error);
-  await db
-    .update(files)
-    .set({
-      status: "failed",
-      processingError: shortError(error),
-      updatedAt: new Date(),
-    })
-    .where(eq(files.id, fileId));
+type LoadedAudio = {
+  storageKey: string;
+  channelId?: string;
+  senderId?: string;
+};
+
+async function loadAudio(target: AudioJobTarget): Promise<LoadedAudio | null> {
+  if (target.table === "files") {
+    const file = await db.query.files.findFirst({ where: eq(files.id, target.id) });
+    if (!file || file.kind !== "audio" || !file.storageKey) {
+      return null;
+    }
+    return { storageKey: file.storageKey };
+  }
+
+  const message = await db.query.chatMessages.findFirst({
+    where: eq(chatMessages.id, target.id),
+  });
+  if (!message || message.type !== "voice" || !message.storageKey || message.deletedAt) {
+    return null;
+  }
+  return {
+    storageKey: message.storageKey,
+    channelId: message.channelId,
+    senderId: message.senderId,
+  };
 }
 
-export async function processAudio(fileId: string): Promise<void> {
-  const file = await db.query.files.findFirst({ where: eq(files.id, fileId) });
-  if (!file || file.kind !== "audio" || !file.storageKey) {
+async function setProcessing(target: AudioJobTarget): Promise<void> {
+  if (target.table === "files") {
+    await db
+      .update(files)
+      .set({
+        status: "processing",
+        processingError: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(files.id, target.id));
     return;
   }
 
-  await db
-    .update(files)
+  const [updated] = await db
+    .update(chatMessages)
     .set({
       status: "processing",
       processingError: null,
-      updatedAt: new Date(),
     })
-    .where(eq(files.id, fileId));
+    .where(eq(chatMessages.id, target.id))
+    .returning();
+
+  if (updated) {
+    await emitChatMessage(updated, "message:updated");
+  }
+}
+
+async function markFailed(target: AudioJobTarget, error: unknown): Promise<void> {
+  console.error(`[media] processAudio failed ${target.table}=${target.id}`, error);
+  const processingError = shortError(error);
+
+  if (target.table === "files") {
+    await db
+      .update(files)
+      .set({
+        status: "failed",
+        processingError,
+        updatedAt: new Date(),
+      })
+      .where(eq(files.id, target.id));
+    return;
+  }
+
+  const [updated] = await db
+    .update(chatMessages)
+    .set({
+      status: "failed",
+      processingError,
+    })
+    .where(eq(chatMessages.id, target.id))
+    .returning();
+
+  if (updated) {
+    await emitChatMessage(updated, "message:updated");
+  }
+}
+
+async function markPassthroughReady(
+  target: AudioJobTarget,
+  durationMs: number | null,
+): Promise<void> {
+  if (target.table === "files") {
+    await db
+      .update(files)
+      .set({
+        status: "ready",
+        durationMs,
+        processingError: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(files.id, target.id));
+    return;
+  }
+
+  const [updated] = await db
+    .update(chatMessages)
+    .set({
+      status: "ready",
+      durationMs,
+      processingError: null,
+    })
+    .where(eq(chatMessages.id, target.id))
+    .returning();
+
+  if (updated) {
+    await emitChatMessage(updated, "message:new");
+    await emitChatMessage(updated, "message:updated");
+  }
+}
+
+async function markTranscodedReady(
+  target: AudioJobTarget,
+  patch: {
+    storageKey: string;
+    mimeType: string;
+    sizeBytes: number;
+    durationMs: number | null;
+    previousKey: string;
+  },
+): Promise<void> {
+  if (target.table === "files") {
+    await db
+      .update(files)
+      .set({
+        status: "ready",
+        storageKey: patch.storageKey,
+        mimeType: patch.mimeType,
+        sizeBytes: patch.sizeBytes,
+        durationMs: patch.durationMs,
+        processingError: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(files.id, target.id));
+  } else {
+    const [updated] = await db
+      .update(chatMessages)
+      .set({
+        status: "ready",
+        storageKey: patch.storageKey,
+        mimeType: patch.mimeType,
+        sizeBytes: patch.sizeBytes,
+        durationMs: patch.durationMs,
+        processingError: null,
+      })
+      .where(eq(chatMessages.id, target.id))
+      .returning();
+
+    if (updated) {
+      await emitChatMessage(updated, "message:new");
+      await emitChatMessage(updated, "message:updated");
+    }
+  }
+
+  if (patch.storageKey !== patch.previousKey) {
+    await deleteStorageKeys([patch.previousKey]);
+  }
+}
+
+async function emitChatMessage(
+  message: typeof chatMessages.$inferSelect,
+  event: "message:new" | "message:updated",
+): Promise<void> {
+  const channel = await db.query.chatChannels.findFirst({
+    where: eq(chatChannels.id, message.channelId),
+  });
+  if (!channel) return;
+
+  const sender = await db.query.users.findFirst({
+    where: eq(users.id, message.senderId),
+  });
+  if (!sender) return;
+
+  const membership = await db.query.groupMembers.findFirst({
+    where: and(
+      eq(groupMembers.groupId, channel.groupId),
+      eq(groupMembers.userId, message.senderId),
+    ),
+  });
+
+  const dto: ChatMessage = toChatMessageDto(message, {
+    id: sender.id,
+    displayName: sender.displayName,
+    role: (membership?.role ?? "student") as GroupRole,
+  });
+
+  if (event === "message:new") {
+    emitMessageNew(dto);
+  } else {
+    emitMessageUpdated(dto);
+  }
+}
+
+export async function processAudio(target: AudioJobTarget | string): Promise<void> {
+  const normalized: AudioJobTarget =
+    typeof target === "string" ? { table: "files", id: target } : target;
+
+  const loaded = await loadAudio(normalized);
+  if (!loaded) {
+    return;
+  }
+
+  await setProcessing(normalized);
 
   const workDir = await mkdtemp(join(tmpdir(), "flc-audio-"));
-  const originalExt = extname(file.storageKey) || ".bin";
+  const originalExt = extname(loaded.storageKey) || ".bin";
   const inputPath = join(workDir, `input${originalExt}`);
   const outputPath = join(workDir, "output.m4a");
 
   try {
-    const body = await downloadObjectStream(file.storageKey);
+    const body = await downloadObjectStream(loaded.storageKey);
     if (!body) {
       throw new Error("empty S3 object body");
     }
@@ -70,69 +257,70 @@ export async function processAudio(fileId: string): Promise<void> {
     try {
       probed = await probe(inputPath);
     } catch (error) {
-      await markFailed(fileId, error instanceof Error ? error : new Error("ffprobe failed"));
+      await markFailed(normalized, error instanceof Error ? error : new Error("ffprobe failed"));
       return;
     }
 
     if (!needsTranscode(probed.codec)) {
-      await db
-        .update(files)
-        .set({
-          status: "ready",
-          durationMs: probed.durationMs,
-          processingError: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(files.id, fileId));
+      const durationMs = await ensureDurationMs(inputPath, probed.durationMs);
+      await markPassthroughReady(normalized, durationMs);
       return;
     }
 
     await toAacM4a(inputPath, outputPath);
+
+    let durationMs: number | null = null;
+    try {
+      const outProbe = await probe(outputPath);
+      durationMs = await ensureDurationMs(outputPath, outProbe.durationMs);
+    } catch {
+      durationMs = await ensureDurationMs(outputPath, null);
+    }
+
     const outStat = await stat(outputPath);
-    const newKey = replaceExtension(file.storageKey, "m4a");
+    const newKey = replaceExtension(loaded.storageKey, "m4a");
 
     await putObjectFromFile(newKey, outputPath, "audio/mp4");
 
     const head = await headObject(newKey);
     const sizeBytes = head.ContentLength ?? outStat.size;
 
-    await db
-      .update(files)
-      .set({
-        status: "ready",
-        storageKey: newKey,
-        mimeType: "audio/mp4",
-        sizeBytes,
-        durationMs: probed.durationMs,
-        processingError: null,
-        updatedAt: new Date(),
-      })
-      .where(eq(files.id, fileId));
-
-    if (newKey !== file.storageKey) {
-      await deleteStorageKeys([file.storageKey]);
-    }
+    await markTranscodedReady(normalized, {
+      storageKey: newKey,
+      mimeType: "audio/mp4",
+      sizeBytes,
+      durationMs,
+      previousKey: loaded.storageKey,
+    });
   } catch (error) {
-    await markFailed(fileId, error);
+    await markFailed(normalized, error);
   } finally {
     await rm(workDir, { recursive: true, force: true }).catch(() => undefined);
   }
 }
 
-export function scheduleProcessAudio(fileId: string): void {
-  enqueueProcessAudio(fileId, processAudio);
+export function scheduleProcessAudio(target: AudioJobTarget | string): void {
+  enqueueProcessAudio(target, processAudio);
 }
 
 export async function recoverProcessingAudio(): Promise<void> {
-  const audio = await db.query.files.findMany({
+  const audioFiles = await db.query.files.findMany({
     where: and(eq(files.status, "processing"), eq(files.kind, "audio")),
   });
-  if (audio.length === 0) {
+  const audioMessages = await db.query.chatMessages.findMany({
+    where: and(eq(chatMessages.status, "processing"), eq(chatMessages.type, "voice")),
+  });
+
+  const total = audioFiles.length + audioMessages.length;
+  if (total === 0) {
     return;
   }
-  console.warn(`[media] recovering ${audio.length} processing audio file(s)`);
-  for (const row of audio) {
-    scheduleProcessAudio(row.id);
+  console.warn(`[media] recovering ${total} processing audio item(s)`);
+  for (const row of audioFiles) {
+    scheduleProcessAudio({ table: "files", id: row.id });
+  }
+  for (const row of audioMessages) {
+    scheduleProcessAudio({ table: "chat_messages", id: row.id });
   }
 }
 

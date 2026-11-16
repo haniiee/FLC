@@ -29,6 +29,11 @@ export default function GroupPage() {
     queryFn: () => getApiClient().getGroup(groupId),
   });
 
+  const chatsQuery = useQuery({
+    queryKey: ["chats", groupId],
+    queryFn: () => getApiClient().listChats(groupId),
+  });
+
   const sessionsQuery = useQuery({
     queryKey: ["sessions", groupId],
     queryFn: () => getApiClient().listSessions(groupId),
@@ -93,6 +98,18 @@ export default function GroupPage() {
             لینک دعوت
           </Button>
         ) : null}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {(chatsQuery.data?.channels ?? []).map((channel) => (
+          <Link
+            key={channel.id}
+            href={`/groups/${groupId}/chat/${channel.id}`}
+            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-secondary"
+          >
+            {channel.kind === "all" ? "چت کلاس" : "چت دانشجوها"}
+          </Link>
+        ))}
       </div>
 
       <div className="flex gap-2 rounded-lg bg-surface p-1">

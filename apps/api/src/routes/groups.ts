@@ -17,10 +17,12 @@ import {
 import { z } from "zod";
 import { db } from "../db";
 import { groupInvites, groupMembers, groups } from "../db/schema";
+import { ensureGroupChatChannels } from "../lib/chat-access";
 import { getMembership, requireGroupRole } from "../lib/group-access";
 import { badRequest, forbidden, notFound } from "../lib/errors";
 import { toInviteDto } from "../lib/mappers";
 import { generateInviteCode } from "../lib/tokens";
+import { kickUserFromGroupChats } from "../realtime";
 
 const GroupIdParams = z.object({ id: z.string().uuid() });
 const MemberParams = z.object({
@@ -70,6 +72,8 @@ export const groupRoutes: FastifyPluginAsync = async (rawApp) => {
           userId: request.user.sub,
           role: "teacher",
         });
+
+        await ensureGroupChatChannels(group.id, tx);
 
         return group;
       });
@@ -298,6 +302,8 @@ export const groupRoutes: FastifyPluginAsync = async (rawApp) => {
             eq(groupMembers.userId, request.params.userId),
           ),
         );
+
+      await kickUserFromGroupChats(request.params.userId, request.params.id);
 
       return { ok: true as const };
     },

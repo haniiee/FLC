@@ -8,6 +8,8 @@ export async function resetDb(): Promise<void> {
   await db.execute(
     drizzleSql.raw(`
     TRUNCATE TABLE
+      chat_messages,
+      chat_channels,
       files,
       topics,
       sessions,

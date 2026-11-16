@@ -26,6 +26,71 @@ export function canManageContent(role: GroupRole | undefined) {
   return role === "teacher" || role === "assistant";
 }
 
+function StatusBadge({
+  status,
+  canManage,
+  onReprocess,
+}: {
+  status: FileDto["status"];
+  canManage: boolean;
+  onReprocess?: () => void;
+}) {
+  if (status === "ready") {
+    return null;
+  }
+  if (status === "processing") {
+    return (
+      <span className="mt-2 inline-block rounded px-2 py-0.5 text-[11px] bg-primary-soft text-secondary">
+        در حال پردازش…
+      </span>
+    );
+  }
+  if (status === "pending" && canManage) {
+    return (
+      <span className="mt-2 inline-block rounded px-2 py-0.5 text-[11px] bg-primary-soft text-secondary">
+        در انتظار آپلود
+      </span>
+    );
+  }
+  if (status === "failed" && canManage) {
+    return (
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <span className="inline-block rounded bg-danger/10 px-2 py-0.5 text-[11px] text-danger">
+          خطا
+        </span>
+        {onReprocess ? (
+          <Button type="button" variant="ghost" className="px-2 py-1 text-xs" onClick={onReprocess}>
+            پردازش دوباره
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
+  return null;
+}
+
+export function OptimisticFileRow({ title, progress }: { title: string; progress: number }) {
+  const pct = Math.round(progress * 100);
+  return (
+    <div className="rounded-lg border border-border bg-surface p-3">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 text-xl" aria-hidden>
+          🎵
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-medium text-text">{title}</p>
+          <p className="mt-1 text-xs text-text-muted">
+            صوت · <bdi dir="ltr">{pct}%</bdi>
+          </p>
+          <span className="mt-2 inline-block rounded bg-primary-soft px-2 py-0.5 text-[11px] text-secondary">
+            در حال ارسال…
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function FileRow({
   file,
   canManage,
@@ -44,6 +109,9 @@ export function FileRow({
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [textOpen, setTextOpen] = useState(false);
+  const [reprocessing, setReprocessing] = useState(false);
+
+  const playable = file.status === "ready";
 
   async function resolveUrl(download = false) {
     const result = await getApiClient().getFileUrl(file.id, download);
@@ -52,7 +120,7 @@ export function FileRow({
 
   async function onOpen() {
     try {
-      if (file.status !== "ready") {
+      if (!playable) {
         return;
       }
       if (file.kind === "audio") {
@@ -95,13 +163,25 @@ export function FileRow({
     }
   }
 
+  async function onReprocess() {
+    setReprocessing(true);
+    try {
+      await getApiClient().reprocessFile(file.id);
+      onChanged();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, "پردازش دوباره ناموفق بود"));
+    } finally {
+      setReprocessing(false);
+    }
+  }
+
   const sizePart = formatBytes(file.sizeBytes);
   const durationPart = formatDuration(file.durationMs);
 
   return (
     <div className="rounded-lg border border-border bg-surface p-3">
       <div className="flex items-start gap-3">
-        {file.kind === "audio" && file.status === "ready" ? (
+        {file.kind === "audio" && playable ? (
           <button
             type="button"
             aria-label={isCurrent && isPlaying ? "توقف" : "پخش"}
@@ -111,14 +191,20 @@ export function FileRow({
             {isCurrent && isPlaying ? "❚❚" : "▶"}
           </button>
         ) : (
-          <button type="button" className="mt-0.5 text-xl" onClick={() => void onOpen()}>
+          <button
+            type="button"
+            className="mt-0.5 text-xl disabled:opacity-40"
+            disabled={!playable && file.kind === "audio"}
+            onClick={() => void onOpen()}
+          >
             <KindIcon kind={file.kind} />
           </button>
         )}
         <div className="min-w-0 flex-1">
           <button
             type="button"
-            className="block w-full text-right font-medium text-text"
+            className="block w-full text-right font-medium text-text disabled:opacity-60"
+            disabled={!playable && file.kind === "audio"}
             onClick={() => void onOpen()}
           >
             {file.displayName}
@@ -138,20 +224,18 @@ export function FileRow({
               </>
             ) : null}
           </p>
-          {file.status !== "ready" && canManage ? (
-            <span
-              className={`mt-2 inline-block rounded px-2 py-0.5 text-[11px] ${
-                file.status === "pending"
-                  ? "bg-primary-soft text-secondary"
-                  : "bg-danger/10 text-danger"
-              }`}
-            >
-              {file.status === "pending" ? "در انتظار آپلود" : "ناموفق"}
-            </span>
-          ) : null}
+          <StatusBadge
+            status={file.status}
+            canManage={canManage}
+            onReprocess={
+              file.status === "failed" && canManage && !reprocessing
+                ? () => void onReprocess()
+                : undefined
+            }
+          />
         </div>
         <div className="flex items-center gap-1">
-          {file.status === "ready" ? (
+          {playable ? (
             <Button
               type="button"
               variant="ghost"

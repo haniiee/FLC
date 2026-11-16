@@ -1,6 +1,13 @@
 import {
   AuthResponseSchema,
+  ChatChannelsResponseSchema,
+  ChatMessageSchema,
+  ChatMessagesResponseSchema,
+  ChatMessageUrlResponseSchema,
+  ChatVoiceUploadBodySchema,
+  ChatVoiceUploadResponseSchema,
   CompleteFileBodySchema,
+  CreateChatTextBodySchema,
   CreateGroupBodySchema,
   CreateInviteBodySchema,
   CreateSessionBodySchema,
@@ -35,7 +42,14 @@ import {
   UploadUrlBodySchema,
   UploadUrlResponseSchema,
   type AuthResponse,
+  type ChatChannelsResponse,
+  type ChatMessage,
+  type ChatMessagesResponse,
+  type ChatMessageUrlResponse,
+  type ChatVoiceUploadBody,
+  type ChatVoiceUploadResponse,
   type CompleteFileBody,
+  type CreateChatTextBody,
   type CreateGroupBody,
   type CreateInviteBody,
   type CreateSessionBody,
@@ -151,6 +165,19 @@ export type ApiClient = {
   deleteFile: (id: string) => Promise<OkResponse>;
   getPlaylist: (sessionId: string) => Promise<PlaylistResponse>;
   uploadFile: (input: UploadFileInput) => Promise<FileDto>;
+  listChats: (groupId: string) => Promise<ChatChannelsResponse>;
+  listChatMessages: (
+    channelId: string,
+    query?: { before?: string; limit?: number },
+  ) => Promise<ChatMessagesResponse>;
+  sendChatText: (channelId: string, body: CreateChatTextBody) => Promise<ChatMessage>;
+  createChatVoiceUploadUrl: (
+    channelId: string,
+    body: ChatVoiceUploadBody,
+  ) => Promise<ChatVoiceUploadResponse>;
+  completeChatVoice: (messageId: string) => Promise<ChatMessage>;
+  getChatMessageUrl: (messageId: string) => Promise<ChatMessageUrlResponse>;
+  deleteChatMessage: (messageId: string) => Promise<OkResponse>;
 };
 
 function putWithProgress(
@@ -460,6 +487,38 @@ export function createApiClient(baseUrl: string, options: ApiClientOptions = {})
     },
     deleteFile: (id) => request(`/files/${id}`, OkResponseSchema, { method: "DELETE" }),
     getPlaylist: (sessionId) => request(`/sessions/${sessionId}/playlist`, PlaylistResponseSchema),
+
+    listChats: (groupId) => request(`/groups/${groupId}/chats`, ChatChannelsResponseSchema),
+    listChatMessages: (channelId, query = {}) => {
+      const params = new URLSearchParams();
+      if (query.before) params.set("before", query.before);
+      if (query.limit !== undefined) params.set("limit", String(query.limit));
+      const qs = params.toString();
+      return request(
+        `/chats/${channelId}/messages${qs ? `?${qs}` : ""}`,
+        ChatMessagesResponseSchema,
+      );
+    },
+    sendChatText: (channelId, body) => {
+      CreateChatTextBodySchema.parse(body);
+      return request(`/chats/${channelId}/messages`, ChatMessageSchema, {
+        method: "POST",
+        body,
+      });
+    },
+    createChatVoiceUploadUrl: (channelId, body) => {
+      ChatVoiceUploadBodySchema.parse(body);
+      return request(`/chats/${channelId}/voice/upload-url`, ChatVoiceUploadResponseSchema, {
+        method: "POST",
+        body,
+      });
+    },
+    completeChatVoice: (messageId) =>
+      request(`/chat-messages/${messageId}/complete`, ChatMessageSchema, { method: "POST" }),
+    getChatMessageUrl: (messageId) =>
+      request(`/chat-messages/${messageId}/url`, ChatMessageUrlResponseSchema),
+    deleteChatMessage: (messageId) =>
+      request(`/chat-messages/${messageId}`, OkResponseSchema, { method: "DELETE" }),
 
     uploadFile: async (input) => {
       const mimeType = input.mimeType || input.file.type || "application/octet-stream";

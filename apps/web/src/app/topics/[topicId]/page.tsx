@@ -3,24 +3,31 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ItemActionsMenu } from "../../../components/content/ItemActionsMenu";
-import { canManageContent, FileRow } from "../../../components/files/FileRow";
+import { canManageContent, FileRow, OptimisticFileRow } from "../../../components/files/FileRow";
 import { UploadSheet } from "../../../components/files/UploadSheet";
+import { RecordButton, type PendingUpload } from "../../../components/recorder/RecordButton";
 import { Button } from "../../../components/ui/Button";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { Spinner } from "../../../components/ui/Spinner";
 import { getApiClient } from "../../../lib/api";
+import { usePlayer } from "../../../player/context";
+import { filesRefetchInterval } from "../../../recorder/refetch-interval";
 
 export default function TopicPage() {
   const params = useParams<{ topicId: string }>();
   const topicId = params.topicId;
   const queryClient = useQueryClient();
+  const player = usePlayer();
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [pending, setPending] = useState<PendingUpload[]>([]);
+  const prevStatuses = useRef<Map<string, string>>(new Map());
 
   const topicQuery = useQuery({
     queryKey: ["topic", topicId],
     queryFn: () => getApiClient().getTopic(topicId),
+    refetchInterval: (query) => filesRefetchInterval(query.state.data?.files ?? []),
   });
 
   const sessionId = topicQuery.data?.topic.sessionId;
@@ -38,6 +45,21 @@ export default function TopicPage() {
   });
 
   const canManage = canManageContent(groupQuery.data?.myRole);
+
+  useEffect(() => {
+    const files = topicQuery.data?.files ?? [];
+    let becameReady = false;
+    for (const file of files) {
+      const prev = prevStatuses.current.get(file.id);
+      if (prev && prev !== "ready" && file.status === "ready") {
+        becameReady = true;
+      }
+      prevStatuses.current.set(file.id, file.status);
+    }
+    if (becameReady) {
+      void player.refreshPlaylist();
+    }
+  }, [player, topicQuery.data?.files]);
 
   async function refresh() {
     await queryClient.invalidateQueries({ queryKey: ["topic", topicId] });
@@ -61,7 +83,7 @@ export default function TopicPage() {
   const { topic, files } = topicQuery.data;
 
   return (
-    <div className="space-y-4">
+    <div className={`space-y-4 ${canManage ? "pb-28" : ""}`}>
       <div>
         <Link href={`/sessions/${sessionId}`} className="text-xs text-text-muted">
           → بازگشت به جلسه
@@ -90,10 +112,13 @@ export default function TopicPage() {
         </Button>
       ) : null}
 
-      {files.length === 0 ? (
+      {files.length === 0 && pending.length === 0 ? (
         <EmptyState title="فایلی در این تاپیک نیست" />
       ) : (
         <div className="space-y-2">
+          {pending.map((item) => (
+            <OptimisticFileRow key={item.id} title="در حال ارسال…" progress={item.progress} />
+          ))}
           {files.map((file) => (
             <FileRow
               key={file.id}
@@ -113,6 +138,16 @@ export default function TopicPage() {
         topicId={topicId}
         onDone={() => void refresh()}
       />
+
+      {canManage ? (
+        <RecordButton
+          sessionId={sessionId}
+          topicId={topicId}
+          pending={pending}
+          onPendingChange={setPending}
+          onUploaded={() => void refresh()}
+        />
+      ) : null}
     </div>
   );
 }

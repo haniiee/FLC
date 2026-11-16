@@ -3,11 +3,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ItemActionsMenu } from "../../../components/content/ItemActionsMenu";
-import { canManageContent, FileRow } from "../../../components/files/FileRow";
+import { canManageContent, FileRow, OptimisticFileRow } from "../../../components/files/FileRow";
 import { UploadSheet } from "../../../components/files/UploadSheet";
+import { RecordButton, type PendingUpload } from "../../../components/recorder/RecordButton";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
@@ -15,6 +16,7 @@ import { Spinner } from "../../../components/ui/Spinner";
 import { getApiClient } from "../../../lib/api";
 import { apiErrorMessage } from "../../../lib/format";
 import { usePlayer } from "../../../player/context";
+import { filesRefetchInterval } from "../../../recorder/refetch-interval";
 
 export default function SessionPage() {
   const params = useParams<{ sessionId: string }>();
@@ -22,10 +24,13 @@ export default function SessionPage() {
   const queryClient = useQueryClient();
   const player = usePlayer();
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [pending, setPending] = useState<PendingUpload[]>([]);
+  const prevStatuses = useRef<Map<string, string>>(new Map());
 
   const sessionQuery = useQuery({
     queryKey: ["session", sessionId],
     queryFn: () => getApiClient().getSession(sessionId),
+    refetchInterval: (query) => filesRefetchInterval(query.state.data?.files ?? []),
   });
 
   const groupId = sessionQuery.data?.session.groupId;
@@ -37,6 +42,21 @@ export default function SessionPage() {
 
   const myRole = groupQuery.data?.myRole;
   const canManage = canManageContent(myRole);
+
+  useEffect(() => {
+    const files = sessionQuery.data?.files ?? [];
+    let becameReady = false;
+    for (const file of files) {
+      const prev = prevStatuses.current.get(file.id);
+      if (prev && prev !== "ready" && file.status === "ready") {
+        becameReady = true;
+      }
+      prevStatuses.current.set(file.id, file.status);
+    }
+    if (becameReady) {
+      void player.refreshPlaylist();
+    }
+  }, [player, sessionQuery.data?.files]);
 
   const createTopic = useMutation({
     mutationFn: () => getApiClient().createTopic(sessionId),
@@ -66,7 +86,7 @@ export default function SessionPage() {
   const { session, topics, files } = sessionQuery.data;
 
   return (
-    <div className="space-y-4">
+    <div className={`space-y-4 ${canManage ? "pb-28" : ""}`}>
       <div>
         <Link href={`/groups/${session.groupId}`} className="text-xs text-text-muted">
           → بازگشت به کلاس
@@ -118,18 +138,23 @@ export default function SessionPage() {
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-text-muted">فایل‌های جلسه</h2>
-        {files.length === 0 ? (
+        {files.length === 0 && pending.length === 0 ? (
           <EmptyState title="فایلی در این جلسه نیست" />
         ) : (
-          files.map((file) => (
-            <FileRow
-              key={file.id}
-              file={file}
-              canManage={canManage}
-              sessionId={sessionId}
-              onChanged={() => void refresh()}
-            />
-          ))
+          <>
+            {pending.map((item) => (
+              <OptimisticFileRow key={item.id} title="در حال ارسال…" progress={item.progress} />
+            ))}
+            {files.map((file) => (
+              <FileRow
+                key={file.id}
+                file={file}
+                canManage={canManage}
+                sessionId={sessionId}
+                onChanged={() => void refresh()}
+              />
+            ))}
+          </>
         )}
       </section>
 
@@ -170,6 +195,15 @@ export default function SessionPage() {
         sessionId={sessionId}
         onDone={() => void refresh()}
       />
+
+      {canManage ? (
+        <RecordButton
+          sessionId={sessionId}
+          pending={pending}
+          onPendingChange={setPending}
+          onUploaded={() => void refresh()}
+        />
+      ) : null}
     </div>
   );
 }

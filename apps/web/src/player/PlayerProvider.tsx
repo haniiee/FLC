@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { toast } from "sonner";
 import { getApiClient } from "../lib/api";
 import { apiErrorMessage } from "../lib/format";
-import { PlayerContext, type PlayerApi } from "./context";
+import { PlayerContext, type ChatVoicePlayInput, type PlayerApi } from "./context";
 import { FullPlayer } from "./FullPlayer";
 import { MiniPlayer } from "./MiniPlayer";
 import {
@@ -99,7 +99,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const state = usePlayerStore.getState();
     const item = selectCurrentItem(state);
     const audio = audioRef.current;
-    if (!item || !audio || !state.sourceSessionId) {
+    // Chat voice uses sourceSessionId "chat" — do not persist resume position.
+    if (!item || !audio || !state.sourceSessionId || state.sourceSessionId === "chat") {
       return;
     }
     const position = audio.currentTime || state.position;
@@ -236,6 +237,28 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     [loadIndex, persistNow],
   );
 
+  const playChatVoice = useCallback(
+    async (input: ChatVoicePlayInput) => {
+      const audio = audioRef.current;
+      if (audio) {
+        await unlockAudio(audio);
+      }
+      const item: PlayerQueueItem = {
+        fileId: `chat:${input.messageId}`,
+        displayName: "پیام صوتی",
+        topicDisplayName: input.senderName,
+        durationMs: input.durationMs,
+        url: input.url,
+        sessionDisplayName: input.senderName,
+        groupDisplayName: "",
+      };
+      const store = usePlayerStore.getState();
+      store.setQueue([item], 0, "chat");
+      store.setResumePrompt(null);
+      loadIndex(0, { seekTo: 0, autoplay: true, reason: "auto-advance" });
+    },
+    [loadIndex],
+  );
   const resumeSaved = useCallback(async () => {
     const saved = usePlayerStore.getState().resumePrompt ?? loadSavedSession();
     if (!saved) {
@@ -389,9 +412,32 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     [loadIndex],
   );
 
+  const refreshPlaylist = useCallback(async () => {
+    const state = usePlayerStore.getState();
+    if (!state.sourceSessionId || state.sourceSessionId === "chat") {
+      return;
+    }
+    const current = selectCurrentItem(state);
+    const meta = await resolveSessionMeta(state.sourceSessionId);
+    const queue = await buildQueue(state.sourceSessionId, meta);
+    let nextIndex = current
+      ? queue.findIndex((item) => item.fileId === current.fileId)
+      : state.currentIndex;
+    if (nextIndex < 0) {
+      nextIndex = Math.min(state.currentIndex, Math.max(queue.length - 1, 0));
+    }
+    usePlayerStore.setState({
+      queue,
+      currentIndex: queue.length ? nextIndex : 0,
+      hasActiveQueue: queue.length > 0,
+      sourceSessionId: state.sourceSessionId,
+    });
+  }, []);
+
   const api = useMemo<PlayerApi>(
     () => ({
       playSession,
+      playChatVoice,
       toggle,
       play,
       pause,
@@ -407,9 +453,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       resumeSaved,
       dismissResume,
       isCurrentFile: (fileId) => selectCurrentItem(usePlayerStore.getState())?.fileId === fileId,
+      refreshPlaylist,
     }),
     [
       playSession,
+      playChatVoice,
       toggle,
       play,
       pause,
@@ -422,6 +470,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       jumpTo,
       resumeSaved,
       dismissResume,
+      refreshPlaylist,
     ],
   );
 
@@ -536,6 +585,19 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         refreshingUrl.current = true;
         const resumeAt = audio.currentTime || state.position;
         try {
+          if (state.sourceSessionId === "chat" && item.fileId.startsWith("chat:")) {
+            const messageId = item.fileId.slice("chat:".length);
+            const refreshed = await getApiClient().getChatMessageUrl(messageId);
+            const nextItem = { ...item, url: refreshed.url };
+            usePlayerStore.getState().updateQueueUrls([nextItem]);
+            pendingSeek.current = resumeAt;
+            audio.src = refreshed.url;
+            audio.load();
+            applyPlaybackRate(audio, state.rate);
+            void audio.play().catch(() => toast.error("پخش این ویس ممکن نیست"));
+            return;
+          }
+
           const meta = {
             sessionDisplayName: item.sessionDisplayName,
             groupDisplayName: item.groupDisplayName,

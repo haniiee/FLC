@@ -37,16 +37,31 @@ class SimpleQueue {
 const audioQueue = new SimpleQueue(2);
 const enqueued = new Set<string>();
 
-export function enqueueProcessAudio(fileId: string, run: (id: string) => Promise<void>): void {
-  if (enqueued.has(fileId)) {
+export type AudioJobTarget = {
+  table: "files" | "chat_messages";
+  id: string;
+};
+
+export function audioJobKey(target: AudioJobTarget): string {
+  return `${target.table}:${target.id}`;
+}
+
+export function enqueueProcessAudio(
+  target: AudioJobTarget | string,
+  run: (target: AudioJobTarget) => Promise<void>,
+): void {
+  const normalized: AudioJobTarget =
+    typeof target === "string" ? { table: "files", id: target } : target;
+  const key = audioJobKey(normalized);
+  if (enqueued.has(key)) {
     return;
   }
-  enqueued.add(fileId);
+  enqueued.add(key);
   audioQueue.add(async () => {
     try {
-      await run(fileId);
+      await run(normalized);
     } finally {
-      enqueued.delete(fileId);
+      enqueued.delete(key);
     }
   });
 }

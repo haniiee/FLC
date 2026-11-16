@@ -1,11 +1,12 @@
 import { spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { env } from "../env";
+import { probe } from "../media/ffprobe";
 import { headObject } from "../storage";
 import {
   authHeader,
@@ -193,6 +194,85 @@ describe("audio media processing", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it.skipIf(!HAS_FFMPEG)(
+    "transcodes non-seekable webm without header duration and still sets durationMs",
+    async () => {
+      const teacher = await teacherAuth(app, "09124000004");
+      const group = await createGroup(app, teacher.accessToken);
+      const session = await createSession(app, teacher.accessToken, group.id);
+
+      const dir = await mkdtemp(join(tmpdir(), "flc-media-pipe-webm-"));
+      const webmPath = join(dir, "noseek.webm");
+      try {
+        const generated = spawnSync(
+          env.FFMPEG_PATH,
+          [
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=2",
+            "-c:a",
+            "libopus",
+            "-f",
+            "webm",
+            "pipe:1",
+          ],
+          { encoding: "buffer", maxBuffer: 10 * 1024 * 1024 },
+        );
+        if (generated.status !== 0 || !generated.stdout?.length) {
+          throw new Error(generated.stderr?.toString("utf8") || "pipe webm failed");
+        }
+        await writeFile(webmPath, generated.stdout);
+
+        const headerProbe = await probe(webmPath);
+        expect(headerProbe.durationMs).toBeNull();
+        expect(headerProbe.codec).toMatch(/opus/i);
+
+        const cli = spawnSync(
+          env.FFPROBE_PATH,
+          ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", webmPath],
+          { encoding: "utf8" },
+        );
+        expect((cli.stdout || "").trim()).toMatch(/N\/A|^$/);
+
+        const bytes = await readFile(webmPath);
+        const upload = await app.inject({
+          method: "POST",
+          url: "/files/upload-url",
+          headers: authHeader(teacher.accessToken),
+          payload: {
+            sessionId: session.id,
+            mimeType: "audio/webm;codecs=opus",
+            sizeBytes: bytes.length,
+            fileName: "noseek.webm",
+            source: "recording",
+          },
+        });
+        expect(upload.statusCode).toBe(200);
+        const body = upload.json();
+        await fetch(body.uploadUrl, {
+          method: "PUT",
+          headers: { "content-type": "audio/webm" },
+          body: bytes,
+        });
+        const complete = await app.inject({
+          method: "POST",
+          url: `/files/${body.file.id}/complete`,
+          headers: authHeader(teacher.accessToken),
+          payload: {},
+        });
+        expect(complete.statusCode).toBe(202);
+
+        const ready = await pollFileStatus(body.file.id, "ready");
+        expect(ready.mimeType).toBe("audio/mp4");
+        expect(ready.durationMs).toBeGreaterThanOrEqual(1900);
+        expect(ready.durationMs).toBeLessThanOrEqual(2100);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    },
+  );
 
   it("marks corrupt audio as failed with processingError", async () => {
     const teacher = await teacherAuth(app, "09124000003");

@@ -375,7 +375,7 @@ export async function completeFileUpload(fileId: string): Promise<CompleteFileRe
         throw notFound("FILE_NOT_FOUND", "فایل پیدا نشد");
       }
 
-      scheduleProcessAudio(fileId);
+      scheduleProcessAudio({ table: "files", id: fileId });
       return { file: toFileDto(processing), httpStatus: 202 };
     }
 
@@ -435,7 +435,7 @@ export async function reprocessFile(fileId: string): Promise<CompleteFileResult>
     throw notFound("FILE_NOT_FOUND", "فایل پیدا نشد");
   }
 
-  scheduleProcessAudio(fileId);
+  scheduleProcessAudio({ table: "files", id: fileId });
   return { file: toFileDto(processing), httpStatus: 202 };
 }
 
