@@ -1,0 +1,223 @@
+"use client";
+
+import { useRef, useState } from "react";
+import { toast } from "sonner";
+import { getApiClient } from "../../lib/api";
+import { apiErrorMessage, FILE_ACCEPT } from "../../lib/format";
+import { Button } from "../ui/Button";
+import { Sheet } from "../ui/Sheet";
+
+async function readAudioDurationMs(file: File): Promise<number | undefined> {
+  if (!file.type.startsWith("audio/")) {
+    return undefined;
+  }
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const duration = await new Promise<number>((resolve, reject) => {
+      const audio = new Audio();
+      audio.preload = "metadata";
+      audio.onloadedmetadata = () => {
+        resolve(Number.isFinite(audio.duration) ? Math.round(audio.duration * 1000) : 0);
+      };
+      audio.onerror = () => reject(new Error("metadata"));
+      audio.src = objectUrl;
+    });
+    return duration > 0 ? duration : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+type UploadItem = {
+  id: string;
+  name: string;
+  progress: number;
+  error?: string;
+};
+
+export function UploadSheet({
+  open,
+  onClose,
+  sessionId,
+  topicId,
+  onDone,
+}: {
+  open: boolean;
+  onClose: () => void;
+  sessionId: string;
+  topicId?: string;
+  onDone: () => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [mode, setMode] = useState<"menu" | "text" | "files">("menu");
+  const [text, setText] = useState("");
+  const [items, setItems] = useState<UploadItem[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  function reset() {
+    setMode("menu");
+    setText("");
+    setItems([]);
+    setBusy(false);
+  }
+
+  function close() {
+    reset();
+    onClose();
+  }
+
+  async function uploadFiles(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) {
+      return;
+    }
+    setMode("files");
+    setBusy(true);
+    const files = Array.from(fileList);
+    setItems(
+      files.map((file, index) => ({ id: `${index}-${file.name}`, name: file.name, progress: 0 })),
+    );
+
+    for (let index = 0; index < files.length; index += 1) {
+      const file = files[index]!;
+      const id = `${index}-${file.name}`;
+      try {
+        const durationMs = await readAudioDurationMs(file);
+        await getApiClient().uploadFile({
+          sessionId,
+          topicId,
+          file,
+          fileName: file.name,
+          mimeType: file.type || undefined,
+          durationMs,
+          onProgress: (progress) => {
+            setItems((current) =>
+              current.map((item) => (item.id === id ? { ...item, progress } : item)),
+            );
+          },
+        });
+        setItems((current) =>
+          current.map((item) => (item.id === id ? { ...item, progress: 1 } : item)),
+        );
+      } catch (error) {
+        const message = apiErrorMessage(error, "آپلود ناموفق");
+        setItems((current) =>
+          current.map((item) => (item.id === id ? { ...item, error: message } : item)),
+        );
+        toast.error(`${file.name}: ${message}`);
+      }
+    }
+
+    setBusy(false);
+    onDone();
+    toast.success("آپلود به پایان رسید");
+  }
+
+  async function submitText() {
+    if (!text.trim()) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await getApiClient().createTextFile({
+        sessionId,
+        topicId,
+        content: text,
+      });
+      toast.success("متن اضافه شد");
+      onDone();
+      close();
+    } catch (error) {
+      toast.error(apiErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Sheet open={open} onClose={close} title="افزودن">
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept={FILE_ACCEPT}
+        className="hidden"
+        onChange={(event) => {
+          void uploadFiles(event.target.files);
+          event.target.value = "";
+        }}
+      />
+
+      {mode === "menu" ? (
+        <div className="space-y-2">
+          <Button type="button" className="w-full" onClick={() => fileInputRef.current?.click()}>
+            فایل
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full"
+            onClick={() => setMode("text")}
+          >
+            متن
+          </Button>
+        </div>
+      ) : null}
+
+      {mode === "text" ? (
+        <div className="space-y-3">
+          <textarea
+            className="min-h-40 w-full rounded-md border border-border bg-background p-3 text-sm outline-none focus:border-secondary"
+            placeholder="متن را بنویسید..."
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+          />
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              className="flex-1"
+              onClick={() => setMode("menu")}
+            >
+              بازگشت
+            </Button>
+            <Button
+              type="button"
+              className="flex-1"
+              disabled={busy}
+              onClick={() => void submitText()}
+            >
+              ذخیره
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {mode === "files" ? (
+        <div className="space-y-3">
+          {items.map((item) => (
+            <div key={item.id} className="rounded-md border border-border p-3">
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="truncate">{item.name}</span>
+                <span className="text-xs text-text-muted">
+                  {item.error ? "خطا" : `${Math.round(item.progress * 100)}%`}
+                </span>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-border">
+                <div
+                  className={`h-full ${item.error ? "bg-danger" : "bg-primary"}`}
+                  style={{ width: `${Math.round(item.progress * 100)}%` }}
+                />
+              </div>
+              {item.error ? <p className="mt-1 text-xs text-danger">{item.error}</p> : null}
+            </div>
+          ))}
+          <Button type="button" className="w-full" disabled={busy} onClick={close}>
+            بستن
+          </Button>
+        </div>
+      ) : null}
+    </Sheet>
+  );
+}

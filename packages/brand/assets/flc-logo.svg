@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="FLC">
+  <rect width="128" height="128" rx="28" fill="#064F47"/>
+  <circle cx="64" cy="52" r="28" fill="#FDAD3E"/>
+  <path d="M36 96h56c0-12.15-12.54-22-28-22H64c-15.46 0-28 9.85-28 22z" fill="#FFF4E3"/>
+  <text x="64" y="58" text-anchor="middle" font-family="Vazirmatn, Tahoma, sans-serif" font-size="22" font-weight="700" fill="#064F47">FLC</text>
+</svg>

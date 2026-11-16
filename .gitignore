@@ -1,0 +1,17 @@
+node_modules
+.turbo
+dist
+.next
+out
+.env
+.env.*
+!.env.example
+.env.local
+*.log
+.DS_Store
+coverage
+*.tsbuildinfo
+*.mp3
+.playwright-mcp
+phase3a-*.png
+apps/web/.tmp-*
