@@ -1,6 +1,5 @@
 "use client";
 
-import icon512 from "@app/brand/assets/icon-512.png";
 import { useEffect } from "react";
 import { Button } from "../components/ui/Button";
 import { usePlayer } from "./context";
@@ -84,7 +83,7 @@ export function FullPlayer() {
 
         <div className="flex flex-1 flex-col items-center justify-center gap-4">
           <img
-            src={icon512.src}
+            src="/icons/icon-512.png"
             alt=""
             width={160}
             height={160}

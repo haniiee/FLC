@@ -10,7 +10,7 @@ export function AppHeader() {
   const logoSrc = typeof flcLogo === "string" ? flcLogo : flcLogo.src;
 
   return (
-    <header className="sticky top-0 z-40 border-b border-secondary/20 bg-secondary text-on-primary">
+    <header className="sticky top-0 z-40 border-b border-secondary/20 bg-secondary text-on-primary pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex max-w-[720px] items-center justify-between gap-3 px-4 py-3">
         <Link href="/" className="flex items-center gap-2">
           <img src={logoSrc} alt="لوگوی FLC" width={36} height={36} />

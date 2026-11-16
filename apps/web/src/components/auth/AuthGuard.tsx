@@ -5,7 +5,7 @@ import { useEffect, type ReactNode } from "react";
 import { Spinner } from "../ui/Spinner";
 import { useAuth } from "../../providers/auth-provider";
 
-const PUBLIC_PREFIXES = ["/login", "/register", "/join"];
+const PUBLIC_PREFIXES = ["/login", "/register", "/join", "/offline"];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));

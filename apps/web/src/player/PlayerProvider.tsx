@@ -1,7 +1,5 @@
 "use client";
 
-import icon192 from "@app/brand/assets/icon-192.png";
-import icon512 from "@app/brand/assets/icon-512.png";
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { toast } from "sonner";
 import { getApiClient } from "../lib/api";
@@ -126,13 +124,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (!item) {
       return;
     }
+    const origin = window.location.origin;
     navigator.mediaSession.metadata = new MediaMetadata({
       title: item.displayName,
       artist: item.topicDisplayName || item.sessionDisplayName,
       album: item.groupDisplayName,
       artwork: [
-        { src: icon192.src, sizes: "192x192", type: "image/png" },
-        { src: icon512.src, sizes: "512x512", type: "image/png" },
+        { src: `${origin}/icons/icon-192.png`, sizes: "192x192", type: "image/png" },
+        { src: `${origin}/icons/icon-512.png`, sizes: "512x512", type: "image/png" },
       ],
     });
     navigator.mediaSession.playbackState = state.isPlaying ? "playing" : "paused";
@@ -492,8 +491,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       }
       const nextIndex = resolveEndedIndex(state.currentIndex, state.queue.length, state.repeatMode);
       if (nextIndex === null) {
+        // Last item + repeat=off: stop; clear pos + resume session (no persistNow).
         usePlayerStore.getState().stop();
-        persistNow();
+        if (endedItem) {
+          clearFilePosition(endedItem.fileId);
+        }
+        clearSavedSession();
         return;
       }
       const item = state.queue[nextIndex];

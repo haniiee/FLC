@@ -99,3 +99,20 @@ export function cycleRepeatMode(mode: RepeatMode): RepeatMode {
   }
   return "off";
 }
+
+/**
+ * After a track ends, always clear `flc:pos:{fileId}`.
+ * When the queue stops (`nextIndex === null`, e.g. last item + repeat=off),
+ * also clear `flc:player:session` so no resume banner remains.
+ */
+export function shouldClearSavedPositionOnEnded(
+  _repeatMode: RepeatMode,
+  _nextIndex: number | null,
+): boolean {
+  return true;
+}
+
+/** Clear resume session storage when ended resolves to stop (no next track). */
+export function shouldClearSavedSessionOnEnded(nextIndex: number | null): boolean {
+  return nextIndex === null;
+}

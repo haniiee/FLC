@@ -6,6 +6,8 @@ import {
   resolvePrevIndex,
   resolveResumePosition,
   resolveSeekOnLoad,
+  shouldClearSavedPositionOnEnded,
+  shouldClearSavedSessionOnEnded,
 } from "./queue-logic";
 
 describe("resolveEndedIndex", () => {
@@ -97,5 +99,26 @@ describe("resolveSeekOnLoad", () => {
   it("user-play / resume restart near the end", () => {
     expect(resolveSeekOnLoad("user-play", 118, 120)).toBe(0);
     expect(resolveSeekOnLoad("resume", 117, 120)).toBe(0);
+  });
+});
+
+describe("shouldClearSavedPositionOnEnded", () => {
+  it("clears position when last item ends with repeat=off", () => {
+    const nextIndex = resolveEndedIndex(2, 3, "off");
+    expect(nextIndex).toBeNull();
+    expect(shouldClearSavedPositionOnEnded("off", nextIndex)).toBe(true);
+    expect(shouldClearSavedSessionOnEnded(nextIndex)).toBe(true);
+  });
+
+  it("clears position on every ended outcome", () => {
+    expect(shouldClearSavedPositionOnEnded("one", 1)).toBe(true);
+    expect(shouldClearSavedPositionOnEnded("all", 0)).toBe(true);
+    expect(shouldClearSavedPositionOnEnded("off", 1)).toBe(true);
+  });
+
+  it("keeps session storage when advancing / looping", () => {
+    expect(shouldClearSavedSessionOnEnded(resolveEndedIndex(0, 3, "off"))).toBe(false);
+    expect(shouldClearSavedSessionOnEnded(resolveEndedIndex(2, 3, "all"))).toBe(false);
+    expect(shouldClearSavedSessionOnEnded(resolveEndedIndex(1, 3, "one"))).toBe(false);
   });
 });
