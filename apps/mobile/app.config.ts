@@ -28,7 +28,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   orientation: "portrait",
   icon: "./assets/images/icon.png",
   scheme: "flc",
-  userInterfaceStyle: "light",
+  userInterfaceStyle: "automatic",
   ios: {
     supportsTablet: true,
     bundleIdentifier: "ir.foroughmahtaban.flc",
@@ -37,7 +37,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     package: "ir.foroughmahtaban.flc",
     adaptiveIcon: {
       foregroundImage: "./assets/images/adaptive-icon.png",
-      backgroundColor: "#064F47",
+      backgroundColor: "#0F1E4A",
     },
     intentFilters: [
       {
@@ -62,7 +62,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       "expo-splash-screen",
       {
-        backgroundColor: "#064F47",
+        backgroundColor: "#0F1E4A",
         image: "./assets/images/splash-icon.png",
         imageWidth: 180,
       },

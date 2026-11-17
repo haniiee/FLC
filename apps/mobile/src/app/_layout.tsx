@@ -1,69 +1,71 @@
 import {
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
+} from "@expo-google-fonts/plus-jakarta-sans";
+import {
   Vazirmatn_400Regular,
   Vazirmatn_500Medium,
   Vazirmatn_700Bold,
-  useFonts,
 } from "@expo-google-fonts/vazirmatn";
+import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
-import { DevSettings, I18nManager, Text, TextInput } from "react-native";
-import { shouldReloadForRtl } from "../lib/rtl";
+import { DevSettings, I18nManager } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AppProviders } from "../providers/app-providers";
-import { colors } from "../theme/colors";
+import { ThemeProvider, useTheme } from "../theme/theme";
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
-const RTL_RELOAD_FLAG = "flc.rtlReloaded";
-
-function markRtlReloadAttempted(): void {
-  // globalThis survives JS reload in the same process; native RTL flips on next load.
-  (globalThis as { [RTL_RELOAD_FLAG]?: boolean })[RTL_RELOAD_FLAG] = true;
-}
-
-function hasRtlReloadAttempted(): boolean {
-  return Boolean((globalThis as { [RTL_RELOAD_FLAG]?: boolean })[RTL_RELOAD_FLAG]);
-}
-
-function reloadForRtl(): void {
-  markRtlReloadAttempted();
+// Clear persisted RTL from earlier Persian builds (RN stores forceRTL across launches).
+I18nManager.allowRTL(false);
+if (I18nManager.isRTL) {
+  I18nManager.forceRTL(false);
   if (__DEV__ && typeof DevSettings?.reload === "function") {
     DevSettings.reload();
-    return;
   }
-  // Release: RN has no public reload API without expo-updates; forceRTL still
-  // applies on the next cold start. Avoid looping.
 }
 
-// RTL must be set before first layout paint; Android applies after app restart.
-I18nManager.allowRTL(true);
-I18nManager.forceRTL(true);
+function RootNavigator() {
+  const { colors, isDark } = useTheme();
 
-if (shouldReloadForRtl(I18nManager.isRTL, hasRtlReloadAttempted())) {
-  reloadForRtl();
+  return (
+    <>
+      <StatusBar style={isDark ? "light" : "dark"} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.bg },
+        }}
+      >
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(app)" />
+      </Stack>
+    </>
+  );
 }
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
     Vazirmatn_400Regular,
     Vazirmatn_500Medium,
     Vazirmatn_700Bold,
   });
 
   useEffect(() => {
-    if (!fontsLoaded) return;
-    // Apply Vazirmatn as default text font (RN still supports defaultProps)
-    const TextAny = Text as unknown as { defaultProps?: { style?: unknown } };
-    const InputAny = TextInput as unknown as { defaultProps?: { style?: unknown } };
-    TextAny.defaultProps = {
-      ...(TextAny.defaultProps ?? {}),
-      style: [{ fontFamily: "Vazirmatn_400Regular" }, TextAny.defaultProps?.style],
-    };
-    InputAny.defaultProps = {
-      ...(InputAny.defaultProps ?? {}),
-      style: [{ fontFamily: "Vazirmatn_400Regular" }, InputAny.defaultProps?.style],
-    };
-    void SplashScreen.hideAsync();
+    if (fontsLoaded) {
+      void SplashScreen.hideAsync();
+    }
   }, [fontsLoaded]);
 
   if (!fontsLoaded) {
@@ -71,18 +73,12 @@ export default function RootLayout() {
   }
 
   return (
-    <AppProviders>
-      <Stack
-        screenOptions={{
-          headerStyle: { backgroundColor: colors.secondary },
-          headerTintColor: colors.onPrimary,
-          headerTitleStyle: { fontFamily: "Vazirmatn_700Bold" },
-          contentStyle: { backgroundColor: colors.background },
-        }}
-      >
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(app)" options={{ headerShown: false }} />
-      </Stack>
-    </AppProviders>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <AppProviders>
+          <RootNavigator />
+        </AppProviders>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

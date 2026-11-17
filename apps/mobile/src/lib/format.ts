@@ -1,37 +1,21 @@
 import { ApiClientError } from "@app/api-client";
 import type { GroupRole } from "@app/shared-types";
-
-const ERROR_MESSAGES: Record<string, string> = {
-  INVALID_CREDENTIALS: "شماره یا رمز عبور نادرست است",
-  PHONE_TAKEN: "این شماره قبلاً ثبت شده است",
-  VALIDATION_ERROR: "اطلاعات واردشده معتبر نیست",
-  UNAUTHORIZED: "نشست شما منقضی شده؛ دوباره وارد شوید",
-  FORBIDDEN: "دسترسی مجاز نیست",
-  NOT_FOUND: "مورد خواسته‌شده پیدا نشد",
-  INVITE_NOT_FOUND: "کد دعوت معتبر نیست",
-  INVITE_EXPIRED: "کد دعوت منقضی شده است",
-  INVITE_REVOKED: "کد دعوت باطل شده است",
-  INVITE_EXHAUSTED: "ظرفیت دعوت‌نامه تکمیل شده است",
-  ALREADY_MEMBER: "شما از قبل عضو این کلاس هستید",
-  RATE_LIMITED: "تعداد درخواست‌ها زیاد است؛ کمی بعد تلاش کنید",
-  REFRESH_FAILED: "نشست منقضی شده؛ دوباره وارد شوید",
-  NO_REFRESH_TOKEN: "نشست منقضی شده؛ دوباره وارد شوید",
-};
+import { copy } from "./copy";
 
 export function roleLabel(role: GroupRole): string {
   switch (role) {
     case "teacher":
-      return "معلم";
+      return copy.classes.roleTeacher;
     case "assistant":
-      return "دستیار";
+      return copy.classes.roleAssistant;
     case "student":
-      return "دانشجو";
+      return copy.classes.roleStudent;
   }
 }
 
-export function apiErrorMessage(error: unknown, fallback = "خطایی رخ داد"): string {
+export function apiErrorMessage(error: unknown, fallback: string = copy.errors.generic): string {
   if (error instanceof ApiClientError) {
-    return ERROR_MESSAGES[error.code] ?? error.message ?? fallback;
+    return copy.errors[error.code as keyof typeof copy.errors] ?? error.message ?? fallback;
   }
   if (
     error &&
@@ -42,4 +26,16 @@ export function apiErrorMessage(error: unknown, fallback = "خطایی رخ دا
     return (error as { message: string }).message;
   }
   return fallback;
+}
+
+export function firstName(displayName: string): string {
+  const part = displayName.trim().split(/\s+/)[0];
+  return part || displayName;
+}
+
+export function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
 }

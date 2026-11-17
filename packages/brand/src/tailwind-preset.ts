@@ -34,6 +34,7 @@ const brandPreset = {
         sm: `${tokens.radius.sm}px`,
         md: `${tokens.radius.md}px`,
         lg: `${tokens.radius.lg}px`,
+        xl: `${tokens.radius.xl}px`,
         full: `${tokens.radius.full}px`,
       },
       spacing: spacingScale,

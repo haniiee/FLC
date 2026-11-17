@@ -1,28 +1,38 @@
+import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Alert, StyleSheet, Text } from "react-native";
-import { Button, Field, Screen, Title } from "../../../components/ui";
-import { parseJoinCodeFromUrl } from "../../../lib/deep-link";
+import { View } from "react-native";
+import { AppText } from "../../../components/AppText";
+import { Button } from "../../../components/Button";
+import { ErrorBanner } from "../../../components/ErrorBanner";
+import { Input } from "../../../components/Input";
+import { Screen } from "../../../components/Screen";
 import { getApiClient } from "../../../lib/api";
+import { parseJoinCodeFromUrl } from "../../../lib/deep-link";
+import { copy } from "../../../lib/copy";
 import { apiErrorMessage } from "../../../lib/format";
-import { colors } from "../../../theme/colors";
+import { useTheme } from "../../../theme/theme";
 
 export default function JoinScreen() {
+  const { colors } = useTheme();
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function onJoin() {
     const parsed = parseJoinCodeFromUrl(code) ?? code.trim();
     if (!parsed) {
-      Alert.alert("کد نامعتبر", "کد دعوت را وارد کنید");
+      setError(copy.join.invalidCode);
       return;
     }
     setLoading(true);
+    setError(null);
     try {
       const result = await getApiClient().joinInvite(parsed);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace(`/groups/${result.groupId}`);
-    } catch (error) {
-      Alert.alert("پیوستن ناموفق", apiErrorMessage(error, "دعوت‌نامه معتبر نیست"));
+    } catch (err) {
+      setError(apiErrorMessage(err, copy.join.joinFailed));
     } finally {
       setLoading(false);
     }
@@ -30,28 +40,36 @@ export default function JoinScreen() {
 
   return (
     <Screen>
-      <Title>پیوستن به کلاس</Title>
-      <Text style={styles.subtitle}>کد دعوت یا لینک را وارد کنید</Text>
-      <Field
-        label="کد دعوت"
-        autoCapitalize="characters"
-        autoCorrect={false}
-        value={code}
-        onChangeText={setCode}
-        placeholder="مثلاً ABC123"
-      />
-      <Button
-        title={loading ? "در حال پیوستن..." : "پیوستن"}
-        disabled={loading || !code.trim()}
-        onPress={() => void onJoin()}
-      />
+      <View style={{ gap: 16, paddingTop: 12 }}>
+        <View style={{ gap: 6 }}>
+          <AppText variant="display">{copy.join.title}</AppText>
+          <AppText variant="body" color="textMuted">
+            {copy.join.subtitle}
+          </AppText>
+        </View>
+        {error ? <ErrorBanner message={error} /> : null}
+        <Input
+          label={copy.join.codeLabel}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          value={code}
+          onChangeText={setCode}
+          placeholder={copy.join.codePlaceholder}
+          style={{
+            fontSize: 24,
+            letterSpacing: 4,
+            fontFamily: "PlusJakartaSans_700Bold",
+            color: colors.text,
+          }}
+        />
+        <Button
+          title={loading ? copy.join.joining : copy.join.join}
+          size="lg"
+          loading={loading}
+          disabled={loading || !code.trim()}
+          onPress={() => void onJoin()}
+        />
+      </View>
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  subtitle: {
-    color: colors.textMuted,
-    marginVertical: 12,
-  },
-});
