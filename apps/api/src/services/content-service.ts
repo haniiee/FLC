@@ -1,11 +1,17 @@
-import { and, asc, count, eq, isNull } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNull, lt, ne } from "drizzle-orm";
 import type { GroupRole } from "@app/shared-types";
 import { db } from "../db";
 import { files, sessions, topics, type FileRow } from "../db/schema";
 import { toFileDto, toSessionSummary, toTopicSummary, visibleFiles } from "../lib/content-mappers";
 import { fileDisplayName, topicDisplayName } from "@app/shared-types";
 import { AppError, badRequest, notFound } from "../lib/errors";
-import { nextFileNumber, nextSessionNumber, nextTopicNumber } from "../lib/numbering";
+import {
+  fileNumberForComplete,
+  nextFileNumber,
+  nextSessionNumber,
+  nextTopicNumber,
+} from "../lib/numbering";
+import { STALE_PENDING_MS, isStalePending } from "../lib/stale-pending";
 import { scheduleProcessAudio } from "../media/process-audio";
 import {
   assertSizeAllowed,
@@ -36,7 +42,7 @@ async function countTopics(sessionId: string) {
 }
 
 async function countSessionFiles(sessionId: string, includeIncomplete: boolean) {
-  const conditions = [eq(files.sessionId, sessionId)];
+  const conditions = [eq(files.sessionId, sessionId), ne(files.status, "pending")];
   if (!includeIncomplete) {
     conditions.push(eq(files.status, "ready"));
   }
@@ -48,7 +54,7 @@ async function countSessionFiles(sessionId: string, includeIncomplete: boolean) 
 }
 
 async function countTopicFiles(topicId: string, includeIncomplete: boolean) {
-  const conditions = [eq(files.topicId, topicId)];
+  const conditions = [eq(files.topicId, topicId), ne(files.status, "pending")];
   if (!includeIncomplete) {
     conditions.push(eq(files.status, "ready"));
   }
@@ -285,12 +291,6 @@ export async function createUploadUrlForFile(input: {
   const storedMime = baseMime(input.mimeType);
 
   const file = await db.transaction(async (tx) => {
-    const number = await nextFileNumber(tx, {
-      sessionId: session.id,
-      topicId: topic?.id ?? null,
-      kind,
-    });
-
     const [created] = await tx
       .insert(files)
       .values({
@@ -298,7 +298,7 @@ export async function createUploadUrlForFile(input: {
         sessionId: session.id,
         topicId: topic?.id ?? null,
         kind,
-        number,
+        number: null,
         title: null,
         storageKey: null,
         mimeType: storedMime,
@@ -361,15 +361,25 @@ export async function completeFileUpload(fileId: string): Promise<CompleteFileRe
     }
 
     if (file.kind === "audio") {
-      const [processing] = await db
-        .update(files)
-        .set({
-          status: "processing",
-          processingError: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(files.id, fileId))
-        .returning();
+      const processing = await db.transaction(async (tx) => {
+        const number = await fileNumberForComplete(tx, {
+          id: file.id,
+          sessionId: file.sessionId,
+          topicId: file.topicId,
+          kind: file.kind,
+        });
+        const [row] = await tx
+          .update(files)
+          .set({
+            number,
+            status: "processing",
+            processingError: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(files.id, fileId))
+          .returning();
+        return row;
+      });
 
       if (!processing) {
         throw notFound("FILE_NOT_FOUND", "فایل پیدا نشد");
@@ -379,14 +389,24 @@ export async function completeFileUpload(fileId: string): Promise<CompleteFileRe
       return { file: toFileDto(processing), httpStatus: 202 };
     }
 
-    const [ready] = await db
-      .update(files)
-      .set({
-        status: "ready",
-        updatedAt: new Date(),
-      })
-      .where(eq(files.id, fileId))
-      .returning();
+    const ready = await db.transaction(async (tx) => {
+      const number = await fileNumberForComplete(tx, {
+        id: file.id,
+        sessionId: file.sessionId,
+        topicId: file.topicId,
+        kind: file.kind,
+      });
+      const [row] = await tx
+        .update(files)
+        .set({
+          number,
+          status: "ready",
+          updatedAt: new Date(),
+        })
+        .where(eq(files.id, fileId))
+        .returning();
+      return row;
+    });
 
     if (!ready) {
       throw notFound("FILE_NOT_FOUND", "فایل پیدا نشد");
@@ -485,6 +505,25 @@ export async function createTextFile(input: {
   return toFileDto(file, { includeText: true });
 }
 
+/** Delete pending file rows older than one hour (and their S3 objects). */
+export async function cleanupStalePendingFiles(now: Date = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - STALE_PENDING_MS);
+  const stale = await db.query.files.findMany({
+    where: and(eq(files.status, "pending"), lt(files.createdAt, cutoff)),
+  });
+  // Defense in depth — also filter with the pure helper.
+  const victims = stale.filter((row) => isStalePending(row.createdAt, now));
+  if (victims.length === 0) return 0;
+
+  const keys = victims.map((row) => row.storageKey).filter((key): key is string => !!key);
+  const ids = victims.map((row) => row.id);
+  await db.delete(files).where(inArray(files.id, ids));
+  if (keys.length > 0) {
+    await deleteStorageKeys(keys);
+  }
+  return victims.length;
+}
+
 export async function getFileDownloadUrl(fileId: string, download: boolean) {
   const file = await db.query.files.findFirst({ where: eq(files.id, fileId) });
   if (!file) {
@@ -500,7 +539,7 @@ export async function getFileDownloadUrl(fileId: string, download: boolean) {
     throw badRequest("FILE_NO_STORAGE", "فایل ذخیره‌سازی ندارد");
   }
 
-  const displayName = fileDisplayName(file);
+  const displayName = fileDisplayName(file) ?? "file";
   const ext = extensionForMime(file.mimeType, file.kind);
   const fileName = `${displayName}.${ext}`;
   const url = await createDownloadUrl(file.storageKey, {
@@ -552,7 +591,7 @@ export async function getPlaylist(sessionId: string) {
 
   const direct = audioFiles
     .filter((file) => file.topicId === null)
-    .sort((a, b) => a.number - b.number);
+    .sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
 
   const byTopic = new Map<string, FileRow[]>();
   for (const file of audioFiles) {
@@ -565,22 +604,24 @@ export async function getPlaylist(sessionId: string) {
   const items = [];
 
   for (const file of direct) {
-    if (!file.storageKey) continue;
+    const displayName = fileDisplayName(file);
+    if (!file.storageKey || !displayName) continue;
     items.push({
       fileId: file.id,
-      displayName: fileDisplayName(file),
+      displayName,
       durationMs: file.durationMs,
       url: await createDownloadUrl(file.storageKey, { expiresIn: 3600 }),
     });
   }
 
   for (const topic of topicRows) {
-    const list = (byTopic.get(topic.id) ?? []).sort((a, b) => a.number - b.number);
+    const list = (byTopic.get(topic.id) ?? []).sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
     for (const file of list) {
-      if (!file.storageKey) continue;
+      const displayName = fileDisplayName(file);
+      if (!file.storageKey || !displayName) continue;
       items.push({
         fileId: file.id,
-        displayName: fileDisplayName(file),
+        displayName,
         topicDisplayName: topicDisplayName(topic),
         durationMs: file.durationMs,
         url: await createDownloadUrl(file.storageKey, { expiresIn: 3600 }),

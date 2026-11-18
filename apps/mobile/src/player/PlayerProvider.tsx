@@ -47,6 +47,7 @@ export function PlayerProvider({ children }: PlayerProviderProps) {
   const [repeat, setRepeat] = useState<RepeatMode>("off");
   const [rate, setRateState] = useState(1);
   const [toast, setToast] = useState<string | null>(null);
+  const [isRecordingOverlay, setRecordingOverlay] = useState(false);
   const queueRef = useRef<PlayerQueueItem[]>([]);
   const lastPersistAt = useRef(0);
   const retriedFileId = useRef<string | null>(null);
@@ -257,6 +258,12 @@ export function PlayerProvider({ children }: PlayerProviderProps) {
     },
     [activateLockScreen, playlist],
   );
+
+  const pause = useCallback(() => {
+    if (!playlist.playing) return;
+    playlist.pause();
+    void persistPosition(true);
+  }, [persistPosition, playlist]);
 
   const toggle = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -475,6 +482,7 @@ export function PlayerProvider({ children }: PlayerProviderProps) {
       playQueue,
       playIndex,
       toggle,
+      pause,
       next,
       previous,
       seekTo,
@@ -483,6 +491,8 @@ export function PlayerProvider({ children }: PlayerProviderProps) {
       cycleSpeed,
       openFullPlayer,
       dismissToast: () => setToast(null),
+      isRecordingOverlay,
+      setRecordingOverlay,
     }),
     [
       queue,
@@ -498,6 +508,7 @@ export function PlayerProvider({ children }: PlayerProviderProps) {
       playQueue,
       playIndex,
       toggle,
+      pause,
       next,
       previous,
       seekTo,
@@ -505,6 +516,7 @@ export function PlayerProvider({ children }: PlayerProviderProps) {
       cycleRepeat,
       cycleSpeed,
       openFullPlayer,
+      isRecordingOverlay,
     ],
   );
 

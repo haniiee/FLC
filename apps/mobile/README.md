@@ -30,10 +30,22 @@ Upload URLs are signed for `S3_PUBLIC_ENDPOINT` (usually `http://localhost:9000`
 
 ```bash
 pnpm --filter @app/mobile android:reverse
-# adb reverse tcp:8082 tcp:8082 && adb reverse tcp:9000 tcp:9000 && adb reverse tcp:4000 tcp:4000
+# or: pnpm --filter @app/mobile dev:reverse
 ```
 
 On a **physical phone on LAN**, set both `EXPO_PUBLIC_API_URL` and the API’s `S3_PUBLIC_ENDPOINT` to the laptop’s LAN IP (e.g. `http://192.168.x.x:4000` / `http://192.168.x.x:9000`) so signed URLs match what the device can reach.
+
+### Dev networking
+
+After the emulator or `adb` restarts, re-run port reverse so Metro, API, MinIO, and extras stay reachable from the device:
+
+```bash
+adb reverse tcp:8082 tcp:8082 && adb reverse tcp:9000 tcp:9000 && adb reverse tcp:4000 tcp:4000 && adb reverse tcp:8083 tcp:8083
+# shortcut:
+pnpm --filter @app/mobile dev:reverse
+```
+
+Without `tcp:9000`, voice uploads fail after `prepare` (PUT never reaches MinIO) and leave a local Failed row — the API no longer lists orphan `pending` files.
 
 ## اجرا (dev build)
 
@@ -58,6 +70,19 @@ pnpm --filter @app/mobile android
 ```
 
 Metro reload alone is not enough for background playback / notification controls.
+
+### Voice recording (6c)
+
+`expo-audio` also sets `microphonePermission` and keeps `enableBackgroundRecording: false`. Changing the plugin (permission string or recording flags) requires a **native rebuild** — Metro reload is not enough:
+
+```bash
+pnpm --filter @app/mobile android
+# or: pnpm --filter @app/mobile ios
+```
+
+On the Android emulator, enable the mic under **Extended controls → Microphone** and turn on **Virtual microphone uses host audio input**.
+
+بعد از تغییر در `RecordButton`، برای تست صوتی reload کامل لازم است.
 
 ## RTL / فونت
 

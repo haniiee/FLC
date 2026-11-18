@@ -131,7 +131,7 @@ export const files = pgTable(
       .references(() => sessions.id, { onDelete: "cascade" }),
     topicId: uuid("topic_id").references(() => topics.id, { onDelete: "cascade" }),
     kind: fileKindEnum("kind").notNull(),
-    number: integer("number").notNull(),
+    number: integer("number"),
     title: text("title"),
     storageKey: text("storage_key"),
     mimeType: text("mime_type").notNull(),

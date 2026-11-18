@@ -261,21 +261,33 @@ export function FileRow({
         </div>
       </div>
 
-      <Sheet open={Boolean(imageUrl)} onClose={() => setImageUrl(null)} title={file.displayName}>
+      <Sheet
+        open={Boolean(imageUrl)}
+        onClose={() => setImageUrl(null)}
+        title={file.displayName ?? undefined}
+      >
         {imageUrl ? (
           <img
             src={imageUrl}
-            alt={file.displayName}
+            alt={file.displayName ?? ""}
             className="max-h-[70vh] w-full object-contain"
           />
         ) : null}
       </Sheet>
 
-      <Sheet open={Boolean(videoUrl)} onClose={() => setVideoUrl(null)} title={file.displayName}>
+      <Sheet
+        open={Boolean(videoUrl)}
+        onClose={() => setVideoUrl(null)}
+        title={file.displayName ?? undefined}
+      >
         {videoUrl ? <video className="w-full rounded-md" controls src={videoUrl} /> : null}
       </Sheet>
 
-      <Sheet open={textOpen} onClose={() => setTextOpen(false)} title={file.displayName}>
+      <Sheet
+        open={textOpen}
+        onClose={() => setTextOpen(false)}
+        title={file.displayName ?? undefined}
+      >
         <pre className="whitespace-pre-wrap rounded-md bg-surface p-3 text-sm text-text">
           {file.textContent ?? "متن در دسترس نیست"}
         </pre>

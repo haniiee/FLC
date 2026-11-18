@@ -1,6 +1,9 @@
 import { buildApp } from "./app";
 import { env } from "./env";
 import { checkFfmpeg, recoverProcessingAudio } from "./media/process-audio";
+import { cleanupStalePendingFiles } from "./services/content-service";
+
+const STALE_PENDING_INTERVAL_MS = 30 * 60 * 1000;
 
 const app = await buildApp();
 
@@ -16,6 +19,18 @@ try {
   void recoverProcessingAudio().catch((error) => {
     app.log.error(error, "failed to recover processing audio");
   });
+
+  const runStalePendingCleanup = () => {
+    void cleanupStalePendingFiles()
+      .then((n) => {
+        if (n > 0) app.log.info({ count: n }, "cleaned stale pending files");
+      })
+      .catch((error) => {
+        app.log.error(error, "failed to clean stale pending files");
+      });
+  };
+  runStalePendingCleanup();
+  setInterval(runStalePendingCleanup, STALE_PENDING_INTERVAL_MS);
 } catch (error) {
   app.log.error(error);
   process.exit(1);

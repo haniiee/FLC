@@ -1,10 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { ArrowLeft, FileText, Plus } from "lucide-react-native";
+import { ArrowLeft, FileText } from "lucide-react-native";
 import { useState } from "react";
 import { Alert, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { AppText } from "../../../components/AppText";
-import { Button } from "../../../components/Button";
+import { ContentActionsRow } from "../../../components/content/ContentActionsRow";
 import { FileRow, OptimisticFileRow } from "../../../components/content/FileRow";
 import { ItemActionsSheet } from "../../../components/content/ItemActionsSheet";
 import { RenameModal } from "../../../components/content/RenameModal";
@@ -18,6 +18,7 @@ import { copy } from "../../../lib/copy";
 import { filesRefetchInterval } from "../../../lib/files-refetch-interval";
 import { apiErrorMessage } from "../../../lib/format";
 import { pickAndUploadFile } from "../../../lib/pick-and-upload";
+import { useVoiceUpload } from "../../../lib/use-voice-upload";
 import { useMiniPlayerPadding } from "../../../player/MiniPlayer";
 import { useTheme } from "../../../theme/theme";
 
@@ -61,6 +62,13 @@ export default function TopicDetailScreen() {
       await queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
     }
   }
+
+  const voice = useVoiceUpload({
+    sessionId,
+    topicId,
+    files: topicQuery.data?.files ?? [],
+    onUploaded: refresh,
+  });
 
   async function onAddFile() {
     if (!sessionId) return;
@@ -142,22 +150,17 @@ export default function TopicDetailScreen() {
         </View>
 
         {canManage ? (
-          <View>
-            <Button
-              title={copy.content.addFile}
-              leftIcon={<Plus size={18} color={colors.onPrimary} />}
-              onPress={() => void onAddFile()}
-            />
-          </View>
+          <ContentActionsRow
+            onAddFile={() => void onAddFile()}
+            onVoiceCaptured={(capture) => void voice.upload(capture)}
+            voiceDisabled={Boolean(pendingUpload) || voice.pending?.status === "uploading"}
+          />
         ) : null}
 
         <AppText variant="h2" style={{ marginTop: spacing[6], marginBottom: spacing[3] }}>
           {copy.content.files}
         </AppText>
-        {pendingUpload ? (
-          <OptimisticFileRow title={pendingUpload.title} progress={pendingUpload.progress} />
-        ) : null}
-        {files.length === 0 && !pendingUpload ? (
+        {files.length === 0 && !pendingUpload && !voice.pending ? (
           <EmptyState icon={FileText} title={copy.content.emptyFiles} />
         ) : (
           <View style={{ gap: spacing[3] }}>
@@ -180,6 +183,17 @@ export default function TopicDetailScreen() {
                 }
               />
             ))}
+            {pendingUpload ? (
+              <OptimisticFileRow title={pendingUpload.title} progress={pendingUpload.progress} />
+            ) : null}
+            {voice.pending ? (
+              <OptimisticFileRow
+                title={voice.pending.title}
+                progress={voice.pending.progress}
+                failed={voice.pending.status === "failed"}
+                onRetry={voice.retry}
+              />
+            ) : null}
           </View>
         )}
       </ScrollView>

@@ -19,6 +19,8 @@ export type PlayerApi = PlayerState & {
   /** Explicit user pick from Up next — resume allowed for that file. */
   playIndex: (index: number) => void;
   toggle: () => void;
+  /** Pause if currently playing (e.g. before microphone recording). */
+  pause: () => void;
   next: () => void;
   previous: () => void;
   seekTo: (seconds: number) => Promise<void>;
@@ -27,6 +29,9 @@ export type PlayerApi = PlayerState & {
   cycleSpeed: () => void;
   openFullPlayer: () => void;
   dismissToast: () => void;
+  /** True while the hold-to-record overlay is visible — MiniPlayer hides. */
+  isRecordingOverlay: boolean;
+  setRecordingOverlay: (active: boolean) => void;
 };
 
 export const PlayerContext = createContext<PlayerApi | null>(null);

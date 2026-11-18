@@ -64,6 +64,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       {
         enableBackgroundPlayback: true,
         enableBackgroundRecording: false,
+        microphonePermission: "FLC needs the microphone to record voice messages for your class.",
       },
     ],
     [

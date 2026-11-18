@@ -14,14 +14,14 @@ export function buildQueue(
   return files
     .filter((file) => file.kind === "audio" && file.status === "ready")
     .slice()
-    .sort((a, b) => a.number - b.number)
+    .sort((a, b) => (a.number ?? 0) - (b.number ?? 0))
     .flatMap((file) => {
       const url = urlsByFileId[file.id];
       if (!url) return [];
       return [
         {
           fileId: file.id,
-          displayName: file.displayName,
+          displayName: file.displayName ?? "",
           topicDisplayName: meta.topicDisplayName,
           durationMs: file.durationMs,
           url,

@@ -20,7 +20,7 @@ export async function resolveQueueForContainer(ctx: PlayAudioContext): Promise<P
   const ready = ctx.containerFiles
     .filter((file) => file.kind === "audio" && file.status === "ready")
     .slice()
-    .sort((a, b) => a.number - b.number);
+    .sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
   if (ready.length === 0) return [];
 
   const idSet = new Set(ready.map((file) => file.id));

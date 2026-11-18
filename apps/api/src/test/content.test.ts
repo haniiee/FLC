@@ -134,7 +134,8 @@ describe("sessions topics files", () => {
     expect(upload.statusCode).toBe(200);
     const uploadBody = upload.json();
     expect(uploadBody.file.status).toBe("pending");
-    expect(uploadBody.file.displayName).toBe("PDF 1");
+    expect(uploadBody.file.number).toBeNull();
+    expect(uploadBody.file.displayName).toBeNull();
     expect(uploadBody.file.source).toBe("upload");
 
     const put = await fetch(uploadBody.uploadUrl, {
@@ -152,6 +153,8 @@ describe("sessions topics files", () => {
     });
     expect(complete.statusCode).toBe(200);
     expect(complete.json().status).toBe("ready");
+    expect(complete.json().number).toBe(1);
+    expect(complete.json().displayName).toBe("PDF 1");
 
     const urlRes = await app.inject({
       method: "GET",
@@ -176,7 +179,8 @@ describe("sessions topics files", () => {
       },
     });
     expect(audioUpload.statusCode).toBe(200);
-    expect(audioUpload.json().file.displayName).toBe("Voice 1");
+    expect(audioUpload.json().file.number).toBeNull();
+    expect(audioUpload.json().file.displayName).toBeNull();
     await fetch(audioUpload.json().uploadUrl, {
       method: "PUT",
       headers: { "content-type": "audio/mpeg" },
@@ -190,6 +194,8 @@ describe("sessions topics files", () => {
     });
     expect(audioComplete.statusCode).toBe(202);
     expect(audioComplete.json().status).toBe("processing");
+    expect(audioComplete.json().number).toBe(1);
+    expect(audioComplete.json().displayName).toBe("Voice 1");
   });
 
   it("rejects invalid mime, oversized files, and incomplete uploads", async () => {
@@ -491,5 +497,178 @@ describe("sessions topics files", () => {
     } catch {
       // ignore
     }
+  });
+
+  it("hides pending files from session and topic lists for teachers", async () => {
+    const teacher = await teacherAuth(app, "09123000099");
+    const group = await createGroup(app, teacher.accessToken, "کلاس pending");
+    const session = (
+      await app.inject({
+        method: "POST",
+        url: `/groups/${group.id}/sessions`,
+        headers: authHeader(teacher.accessToken),
+        payload: {},
+      })
+    ).json();
+    const topic = (
+      await app.inject({
+        method: "POST",
+        url: `/sessions/${session.id}/topics`,
+        headers: authHeader(teacher.accessToken),
+        payload: {},
+      })
+    ).json();
+
+    const pending = await app.inject({
+      method: "POST",
+      url: "/files/upload-url",
+      headers: authHeader(teacher.accessToken),
+      payload: {
+        sessionId: session.id,
+        topicId: topic.id,
+        mimeType: "audio/mpeg",
+        sizeBytes: 8,
+        fileName: "orphan.mp3",
+      },
+    });
+    expect(pending.statusCode).toBe(200);
+    expect(pending.json().file.status).toBe("pending");
+    expect(pending.json().file.number).toBeNull();
+    expect(pending.json().file.displayName).toBeNull();
+
+    const topicDetail = await app.inject({
+      method: "GET",
+      url: `/topics/${topic.id}`,
+      headers: authHeader(teacher.accessToken),
+    });
+    expect(topicDetail.statusCode).toBe(200);
+    expect(topicDetail.json().files.some((f: { status: string }) => f.status === "pending")).toBe(
+      false,
+    );
+    expect(topicDetail.json().files).toHaveLength(0);
+
+    const sessionDetail = await app.inject({
+      method: "GET",
+      url: `/sessions/${session.id}`,
+      headers: authHeader(teacher.accessToken),
+    });
+    expect(sessionDetail.statusCode).toBe(200);
+    expect(sessionDetail.json().files.some((f: { status: string }) => f.status === "pending")).toBe(
+      false,
+    );
+  });
+
+  it("numbers concurrent prepares only when each complete runs", async () => {
+    const teacher = await teacherAuth(app, "09123000110");
+    const group = await createGroup(app, teacher.accessToken, "کلاس همزمان");
+    const session = (
+      await app.inject({
+        method: "POST",
+        url: `/groups/${group.id}/sessions`,
+        headers: authHeader(teacher.accessToken),
+        payload: {},
+      })
+    ).json();
+
+    async function prepare(label: string) {
+      const bytes = Buffer.from(`%PDF-1.4 ${label}`);
+      const upload = await app.inject({
+        method: "POST",
+        url: "/files/upload-url",
+        headers: authHeader(teacher.accessToken),
+        payload: {
+          sessionId: session.id,
+          mimeType: "application/pdf",
+          sizeBytes: bytes.length,
+          fileName: `${label}.pdf`,
+        },
+      });
+      expect(upload.statusCode).toBe(200);
+      const body = upload.json();
+      expect(body.file.number).toBeNull();
+      expect(body.file.displayName).toBeNull();
+      expect(body.file.status).toBe("pending");
+      return { body, bytes };
+    }
+
+    const [first, second] = await Promise.all([prepare("a"), prepare("b")]);
+    const preparedIds = [first.body.file.id, second.body.file.id].sort();
+    const pendingRows = await db.query.files.findMany({
+      where: eq(schema.files.sessionId, session.id),
+    });
+    expect(pendingRows.map((row) => row.id).sort()).toEqual(preparedIds);
+    expect(pendingRows.every((row) => row.number == null)).toBe(true);
+
+    async function finish(item: {
+      body: { file: { id: string }; uploadUrl: string };
+      bytes: Buffer;
+    }) {
+      const put = await fetch(item.body.uploadUrl, {
+        method: "PUT",
+        headers: { "content-type": "application/pdf" },
+        body: item.bytes,
+      });
+      expect(put.ok).toBe(true);
+      const complete = await app.inject({
+        method: "POST",
+        url: `/files/${item.body.file.id}/complete`,
+        headers: authHeader(teacher.accessToken),
+        payload: {},
+      });
+      expect(complete.statusCode).toBe(200);
+      return complete.json() as { number: number; displayName: string; id: string };
+    }
+
+    const doneFirst = await finish(first);
+    const doneSecond = await finish(second);
+    expect(doneFirst.number).toBe(1);
+    expect(doneSecond.number).toBe(2);
+    expect(doneFirst.displayName).toBe("PDF 1");
+    expect(doneSecond.displayName).toBe("PDF 2");
+
+    const again = await app.inject({
+      method: "POST",
+      url: `/files/${first.body.file.id}/complete`,
+      headers: authHeader(teacher.accessToken),
+      payload: {},
+    });
+    expect(again.statusCode).toBe(200);
+    expect(again.json().number).toBe(1);
+    expect(again.json().displayName).toBe("PDF 1");
+
+    const titled = await prepare("titled");
+    const renamed = await app.inject({
+      method: "PATCH",
+      url: `/files/${titled.body.file.id}`,
+      headers: authHeader(teacher.accessToken),
+      payload: { title: "Lesson notes" },
+    });
+    expect(renamed.statusCode).toBe(200);
+    expect(renamed.json().displayName).toBe("Lesson notes");
+    const doneTitled = await finish(titled);
+    expect(doneTitled.number).toBe(3);
+    expect(doneTitled.displayName).toBe("Lesson notes");
+
+    const orphan = await prepare("orphan");
+    const rows = await db.query.files.findMany({
+      where: eq(schema.files.sessionId, session.id),
+    });
+    expect(rows.map((row) => row.id).sort()).toEqual(
+      [...preparedIds, titled.body.file.id, orphan.body.file.id].sort(),
+    );
+    expect(rows.find((row) => row.id === orphan.body.file.id)?.number).toBeNull();
+
+    const detail = await app.inject({
+      method: "GET",
+      url: `/sessions/${session.id}`,
+      headers: authHeader(teacher.accessToken),
+    });
+    expect(detail.statusCode).toBe(200);
+    const listed = detail.json().files as Array<{ id: string; number: number; status: string }>;
+    expect(listed.map((file) => file.id).sort()).toEqual(
+      [doneFirst.id, doneSecond.id, doneTitled.id].sort(),
+    );
+    expect(listed.some((file) => file.id === orphan.body.file.id)).toBe(false);
+    expect(listed.map((file) => file.number).sort((a, b) => a - b)).toEqual([1, 2, 3]);
   });
 });

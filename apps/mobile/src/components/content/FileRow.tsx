@@ -81,27 +81,60 @@ function StatusChip({
   return null;
 }
 
-export function OptimisticFileRow({ title, progress }: { title: string; progress: number }) {
-  return <UploadingFileRow label={title} progress={progress} />;
-}
+const UPLOAD_ICON_BOX = 40;
 
-export function UploadingFileRow({ label, progress }: { label: string; progress: number }) {
-  const { spacing } = useTheme();
+export function OptimisticFileRow({
+  title,
+  progress,
+  failed,
+  onRetry,
+}: {
+  title: string;
+  progress: number;
+  failed?: boolean;
+  onRetry?: () => void;
+}) {
+  const { colors, spacing } = useTheme();
   const pct = Math.round(progress * 100);
   return (
     <Card padding={16}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: spacing[3] }}>
-        <ActivityIndicator />
+        <View
+          style={{
+            width: UPLOAD_ICON_BOX,
+            height: UPLOAD_ICON_BOX,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {failed ? null : <ActivityIndicator size="small" color={colors.primary} />}
+        </View>
         <View style={{ flex: 1, gap: spacing[1] }}>
-          <AppText variant="h3">{label}</AppText>
-          <AppText variant="caption" color="textMuted">
-            {copy.content.uploading} {pct}%
-          </AppText>
-          <Chip label={copy.content.uploading} variant="primary" />
+          <AppText variant="h3">{title}</AppText>
+          {failed ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={copy.content.failedRetry}
+              onPress={onRetry}
+              hitSlop={8}
+            >
+              <AppText variant="caption" color="danger">
+                {copy.content.failedRetry}
+              </AppText>
+            </Pressable>
+          ) : (
+            <AppText variant="caption" color="textMuted">
+              {copy.content.uploading} {pct}%
+            </AppText>
+          )}
         </View>
       </View>
     </Card>
   );
+}
+
+export function UploadingFileRow({ label, progress }: { label: string; progress: number }) {
+  return <OptimisticFileRow title={label} progress={progress} />;
 }
 
 type FileRowProps = {
@@ -305,13 +338,13 @@ export function FileRow({ file, canManage, onChanged, playContext }: FileRowProp
       <ImageViewer
         visible={Boolean(imageUrl)}
         uri={imageUrl}
-        title={file.displayName}
+        title={file.displayName ?? ""}
         onClose={() => setImageUrl(null)}
       />
 
       <TextViewer
         visible={textOpen}
-        title={file.displayName}
+        title={file.displayName ?? ""}
         textContent={file.textContent}
         onClose={() => setTextOpen(false)}
       />

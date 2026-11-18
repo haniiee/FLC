@@ -9,12 +9,15 @@ export function topicDisplayName(input: { number: number; title: string | null }
 }
 
 export function fileDisplayName(input: {
-  number: number;
+  number: number | null;
   title: string | null;
   kind: FileKind;
-}): string {
+}): string | null {
   if (input.title) {
     return input.title;
+  }
+  if (input.number == null) {
+    return null;
   }
   switch (input.kind) {
     case "audio":

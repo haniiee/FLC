@@ -19,8 +19,8 @@ export function MiniPlayer() {
     return null;
   }
 
-  // Hide on the full player modal itself.
-  if (segments.includes("player")) {
+  // Hide on the full player modal itself, and while hold-to-record overlay is up.
+  if (segments.includes("player") || player.isRecordingOverlay) {
     return null;
   }
 

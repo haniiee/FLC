@@ -55,9 +55,14 @@ export function toFileDto(file: FileRow, options?: { includeText?: boolean }): F
   };
 }
 
+/**
+ * Pending uploads are never listed (any role) — they are in-flight slots.
+ * Managers still see processing / failed; students only see ready.
+ */
 export function visibleFiles(files: FileRow[], canSeeIncomplete: boolean): FileRow[] {
+  const withoutPending = files.filter((file) => file.status !== "pending");
   if (canSeeIncomplete) {
-    return files;
+    return withoutPending;
   }
-  return files.filter((file) => file.status === "ready");
+  return withoutPending.filter((file) => file.status === "ready");
 }

@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppText } from "../../../components/AppText";
 import { Button } from "../../../components/Button";
 import { Card } from "../../../components/Card";
+import { ContentActionsRow } from "../../../components/content/ContentActionsRow";
 import { FileRow, OptimisticFileRow } from "../../../components/content/FileRow";
 import { ItemActionsSheet } from "../../../components/content/ItemActionsSheet";
 import { RenameModal } from "../../../components/content/RenameModal";
@@ -21,6 +22,7 @@ import { copy } from "../../../lib/copy";
 import { filesRefetchInterval } from "../../../lib/files-refetch-interval";
 import { apiErrorMessage } from "../../../lib/format";
 import { pickAndUploadFile } from "../../../lib/pick-and-upload";
+import { useVoiceUpload } from "../../../lib/use-voice-upload";
 import { useMiniPlayerPadding } from "../../../player/MiniPlayer";
 import { useTheme } from "../../../theme/theme";
 
@@ -54,6 +56,19 @@ export default function SessionDetailScreen() {
 
   const canManage = canManageContent(groupQuery.data?.myRole);
 
+  async function refresh() {
+    await queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
+    if (groupId) {
+      await queryClient.invalidateQueries({ queryKey: ["sessions", groupId] });
+    }
+  }
+
+  const voice = useVoiceUpload({
+    sessionId,
+    files: sessionQuery.data?.files ?? [],
+    onUploaded: refresh,
+  });
+
   const createTopic = useMutation({
     mutationFn: () => getApiClient().createTopic(sessionId),
     onSuccess: async () => {
@@ -64,13 +79,6 @@ export default function SessionDetailScreen() {
     },
     onError: (error) => Alert.alert(copy.content.actionFailed, apiErrorMessage(error)),
   });
-
-  async function refresh() {
-    await queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
-    if (groupId) {
-      await queryClient.invalidateQueries({ queryKey: ["sessions", groupId] });
-    }
-  }
 
   async function onAddFile() {
     try {
@@ -151,28 +159,24 @@ export default function SessionDetailScreen() {
         </View>
 
         {canManage ? (
-          <View style={{ flexDirection: "row", gap: spacing[2] + 2 }}>
-            {showTopNewTopic ? (
-              <View style={{ flex: 1 }}>
-                <Button
-                  title={copy.content.newTopic}
-                  variant="secondary"
-                  leftIcon={<Plus size={18} color={colors.primary} />}
-                  loading={createTopic.isPending}
-                  onPress={() => createTopic.mutate()}
-                />
-              </View>
-            ) : null}
-            <View
-              style={{ flex: showTopNewTopic ? 1 : undefined, alignSelf: "stretch", flexGrow: 1 }}
-            >
-              <Button
-                title={copy.content.addFile}
-                leftIcon={<Plus size={18} color={colors.onPrimary} />}
-                onPress={() => void onAddFile()}
-              />
-            </View>
-          </View>
+          <ContentActionsRow
+            onAddFile={() => void onAddFile()}
+            onVoiceCaptured={(capture) => void voice.upload(capture)}
+            voiceDisabled={Boolean(pendingUpload) || voice.pending?.status === "uploading"}
+            leading={
+              showTopNewTopic ? (
+                <View style={{ flex: 1 }}>
+                  <Button
+                    title={copy.content.newTopic}
+                    variant="secondary"
+                    leftIcon={<Plus size={18} color={colors.primary} />}
+                    loading={createTopic.isPending}
+                    onPress={() => createTopic.mutate()}
+                  />
+                </View>
+              ) : null
+            }
+          />
         ) : null}
 
         <AppText variant="h2" style={{ marginTop: spacing[6], marginBottom: spacing[3] }}>
@@ -212,10 +216,7 @@ export default function SessionDetailScreen() {
         <AppText variant="h2" style={{ marginTop: spacing[6], marginBottom: spacing[3] }}>
           {copy.content.sessionFiles}
         </AppText>
-        {pendingUpload ? (
-          <OptimisticFileRow title={pendingUpload.title} progress={pendingUpload.progress} />
-        ) : null}
-        {files.length === 0 && !pendingUpload ? (
+        {files.length === 0 && !pendingUpload && !voice.pending ? (
           <EmptyState icon={FileText} title={copy.content.emptyFiles} />
         ) : (
           <View style={{ gap: spacing[3] }}>
@@ -233,6 +234,17 @@ export default function SessionDetailScreen() {
                 }}
               />
             ))}
+            {pendingUpload ? (
+              <OptimisticFileRow title={pendingUpload.title} progress={pendingUpload.progress} />
+            ) : null}
+            {voice.pending ? (
+              <OptimisticFileRow
+                title={voice.pending.title}
+                progress={voice.pending.progress}
+                failed={voice.pending.status === "failed"}
+                onRetry={voice.retry}
+              />
+            ) : null}
           </View>
         )}
       </ScrollView>
