@@ -3,7 +3,7 @@ import { tokens } from "@app/brand";
 import { useTheme } from "../theme/theme";
 import { AppText } from "./AppText";
 
-type ChipVariant = "neutral" | "primary" | "accent" | "success";
+type ChipVariant = "neutral" | "primary" | "accent" | "success" | "danger";
 
 type ChipProps = {
   label: string;
@@ -20,6 +20,8 @@ export function Chip({ label, variant = "neutral" }: ChipProps) {
         return { bg: colors.primarySoft, fg: "primary" as const };
       case "success":
         return { bg: `${colors.success}22`, fg: "text" as const };
+      case "danger":
+        return { bg: `${colors.danger}18`, fg: "text" as const };
       default:
         return { bg: colors.surfaceMuted, fg: "textMuted" as const };
     }
@@ -38,7 +40,13 @@ export function Chip({ label, variant = "neutral" }: ChipProps) {
       <AppText
         variant="caption"
         color={palette.fg}
-        style={variant === "success" ? { color: colors.success } : undefined}
+        style={
+          variant === "success"
+            ? { color: colors.success }
+            : variant === "danger"
+              ? { color: colors.danger }
+              : undefined
+        }
       >
         {label}
       </AppText>

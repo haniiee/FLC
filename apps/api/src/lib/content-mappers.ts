@@ -1,6 +1,6 @@
 import type { FileDto, FileKind, FileStatus } from "@app/shared-types";
 import type { FileRow, Session, Topic } from "../db/schema";
-import { fileDisplayName, sessionDisplayName, topicDisplayName } from "./display-name";
+import { fileDisplayName, sessionDisplayName, topicDisplayName } from "@app/shared-types";
 
 export function toSessionSummary(
   session: Session,

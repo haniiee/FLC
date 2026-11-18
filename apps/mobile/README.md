@@ -24,6 +24,17 @@ cp apps/mobile/.env.example apps/mobile/.env
 
 برای HTTP لوکال، `expo-build-properties` با `usesCleartextTraffic: true` فقط وقتی `APP_ENV` برابر `production` نباشد فعال است.
 
+### Presigned S3 / MinIO (emulator)
+
+Upload URLs are signed for `S3_PUBLIC_ENDPOINT` (usually `http://localhost:9000`). Do **not** change that host for the emulator — signature verification fails if the host changes. Instead reverse the ports onto the emulator:
+
+```bash
+pnpm --filter @app/mobile android:reverse
+# adb reverse tcp:8082 tcp:8082 && adb reverse tcp:9000 tcp:9000 && adb reverse tcp:4000 tcp:4000
+```
+
+On a **physical phone on LAN**, set both `EXPO_PUBLIC_API_URL` and the API’s `S3_PUBLIC_ENDPOINT` to the laptop’s LAN IP (e.g. `http://192.168.x.x:4000` / `http://192.168.x.x:9000`) so signed URLs match what the device can reach.
+
 ## اجرا (dev build)
 
 از ریشهٔ monorepo:
@@ -36,6 +47,17 @@ pnpm --filter @app/mobile dev
 ```
 
 اولین `android` یک dev client native می‌سازد و نصب می‌کند؛ بعد فقط Metro کافی است.
+
+### Background audio / lock screen (6b-2)
+
+`expo-audio` is configured with `enableBackgroundPlayback: true`. After changing that plugin option, **rebuild the native app**:
+
+```bash
+pnpm --filter @app/mobile android
+# or: pnpm --filter @app/mobile ios
+```
+
+Metro reload alone is not enough for background playback / notification controls.
 
 ## RTL / فونت
 
@@ -60,6 +82,7 @@ pnpm --filter @app/mobile dev
 |--------|-----|
 | `dev` | `expo start --dev-client` |
 | `android` | `expo run:android` |
+| `android:reverse` | `adb reverse` for Metro `:8082`, MinIO `:9000`, API `:4000` |
 | `lint` / `typecheck` / `test` | کیفیت |
 
 ## ساختار

@@ -1,34 +1,36 @@
-import { useQuery } from "@tanstack/react-query";
-import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { StatusBar, setStatusBarStyle } from "expo-status-bar";
-import { ArrowLeft, BookOpen } from "lucide-react-native";
-import { useCallback } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { router, useLocalSearchParams } from "expo-router";
+import { ArrowLeft, BookOpen, ChevronRight } from "lucide-react-native";
+import { useState } from "react";
+import { Alert, Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppText } from "../../../components/AppText";
+import { Button } from "../../../components/Button";
+import { Card } from "../../../components/Card";
 import { Chip, roleChipVariant } from "../../../components/Chip";
+import { ItemActionsSheet } from "../../../components/content/ItemActionsSheet";
+import { RenameModal } from "../../../components/content/RenameModal";
 import { EmptyState } from "../../../components/EmptyState";
+import { ErrorBanner } from "../../../components/ErrorBanner";
 import { GradientHero } from "../../../components/GradientHero";
+import { MoreOptionsButton } from "../../../components/MoreOptionsButton";
 import { Screen } from "../../../components/Screen";
-import { LoadingScreen } from "../../../components/Skeleton";
+import { SessionsSkeletonList } from "../../../components/Skeleton";
 import { getApiClient } from "../../../lib/api";
+import { canManageContent } from "../../../lib/content-permissions";
 import { copy } from "../../../lib/copy";
-import { roleLabel } from "../../../lib/format";
+import { apiErrorMessage, roleLabel } from "../../../lib/format";
+import { useMiniPlayerPadding } from "../../../player/MiniPlayer";
 import { useTheme } from "../../../theme/theme";
 
 export default function GroupDetailScreen() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
-  const { colors, isDark } = useTheme();
+  const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
-
-  useFocusEffect(
-    useCallback(() => {
-      setStatusBarStyle("light");
-      return () => {
-        setStatusBarStyle(isDark ? "light" : "dark");
-      };
-    }, [isDark]),
-  );
+  const miniPad = useMiniPlayerPadding();
+  const queryClient = useQueryClient();
+  const [actionsSessionId, setActionsSessionId] = useState<string | null>(null);
+  const [renameSessionId, setRenameSessionId] = useState<string | null>(null);
 
   const groupQuery = useQuery({
     queryKey: ["group", groupId],
@@ -36,8 +38,39 @@ export default function GroupDetailScreen() {
     enabled: Boolean(groupId),
   });
 
+  const sessionsQuery = useQuery({
+    queryKey: ["sessions", groupId],
+    queryFn: () => getApiClient().listSessions(groupId),
+    enabled: Boolean(groupId),
+  });
+
+  const createSession = useMutation({
+    mutationFn: () => getApiClient().createSession(groupId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["sessions", groupId] });
+    },
+    onError: (error) => {
+      Alert.alert(copy.group.loadFailed, apiErrorMessage(error, copy.group.loadFailed));
+    },
+  });
+
+  const canManage = canManageContent(groupQuery.data?.myRole);
+  const sessions = sessionsQuery.data?.sessions ?? [];
+  const actionSession = sessions.find((s) => s.id === actionsSessionId);
+  const renameSession = sessions.find((s) => s.id === renameSessionId);
+
+  async function refreshSessions() {
+    await queryClient.invalidateQueries({ queryKey: ["sessions", groupId] });
+  }
+
   if (groupQuery.isLoading) {
-    return <LoadingScreen />;
+    return (
+      <Screen padded={false}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 24 }}>
+          <SessionsSkeletonList />
+        </View>
+      </Screen>
+    );
   }
 
   if (!groupQuery.data) {
@@ -52,8 +85,16 @@ export default function GroupDetailScreen() {
 
   return (
     <Screen padded={false} edges={[]}>
-      <StatusBar style="light" />
-      <ScrollView contentContainerStyle={{ paddingBottom: 96 }}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: (canManage ? 120 : 96) + miniPad }}
+        refreshControl={
+          <RefreshControl
+            refreshing={sessionsQuery.isRefetching && !sessionsQuery.isLoading}
+            onRefresh={() => void refreshSessions()}
+            tintColor={colors.primary}
+          />
+        }
+      >
         <GradientHero
           style={{
             borderRadius: 0,
@@ -91,25 +132,117 @@ export default function GroupDetailScreen() {
           </View>
         </GradientHero>
 
-        <View style={{ paddingHorizontal: 16, paddingTop: 20, gap: 8 }}>
+        <View style={{ paddingHorizontal: spacing[4], paddingTop: spacing[5], gap: spacing[3] }}>
           <AppText variant="h2">{copy.group.sessions}</AppText>
-          <View
-            style={{
-              minHeight: 280,
-              borderRadius: 20,
-              backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderColor: colors.border,
-            }}
-          >
-            <EmptyState
-              icon={BookOpen}
-              title={copy.group.sessionsComing}
-              subtitle={copy.group.sessionsComingSubtitle}
-            />
-          </View>
+
+          {sessionsQuery.isError ? (
+            <View style={{ gap: spacing[3] }}>
+              <ErrorBanner message={copy.group.loadFailed} />
+              <Button
+                title={copy.group.retry}
+                onPress={() => void sessionsQuery.refetch()}
+                variant="outline"
+              />
+            </View>
+          ) : sessionsQuery.isLoading ? (
+            <SessionsSkeletonList />
+          ) : sessions.length === 0 ? (
+            <View
+              style={{
+                minHeight: 240,
+                borderRadius: 20,
+                backgroundColor: colors.surface,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+            >
+              <EmptyState
+                icon={BookOpen}
+                title={
+                  canManage ? copy.group.emptySessionsTeacher : copy.group.emptySessionsStudent
+                }
+                subtitle={copy.group.emptySessionsSubtitle}
+                actionTitle={canManage ? copy.group.newSession : undefined}
+                onAction={canManage ? () => createSession.mutate() : undefined}
+              />
+            </View>
+          ) : (
+            <View style={{ gap: spacing[3] }}>
+              {sessions.map((session) => (
+                <Card
+                  key={session.id}
+                  pressable
+                  accessibilityLabel={session.displayName}
+                  onPress={() => router.push(`/sessions/${session.id}`)}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing[3] }}>
+                    <View style={{ flex: 1, gap: 6 }}>
+                      <AppText variant="h3">{session.displayName}</AppText>
+                      <AppText variant="caption" color="textMuted">
+                        {copy.group.sessionMeta(session.topicCount, session.fileCount)}
+                      </AppText>
+                    </View>
+                    {canManage ? (
+                      <MoreOptionsButton
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          setActionsSessionId(session.id);
+                        }}
+                      />
+                    ) : null}
+                    <ChevronRight size={20} color={colors.textMuted} />
+                  </View>
+                </Card>
+              ))}
+            </View>
+          )}
         </View>
       </ScrollView>
+
+      {canManage && sessions.length > 0 ? (
+        <View
+          style={{
+            position: "absolute",
+            left: 16,
+            right: 16,
+            bottom: Math.max(insets.bottom, 16),
+          }}
+        >
+          <Button
+            title={copy.group.newSession}
+            loading={createSession.isPending}
+            disabled={createSession.isPending}
+            onPress={() => createSession.mutate()}
+          />
+        </View>
+      ) : null}
+
+      {actionSession ? (
+        <ItemActionsSheet
+          visible={Boolean(actionsSessionId)}
+          onClose={() => setActionsSessionId(null)}
+          onRename={() => {
+            setRenameSessionId(actionSession.id);
+            setActionsSessionId(null);
+          }}
+          onDelete={async () => {
+            await getApiClient().deleteSession(actionSession.id);
+            setActionsSessionId(null);
+            await refreshSessions();
+          }}
+        />
+      ) : null}
+
+      <RenameModal
+        visible={Boolean(renameSession)}
+        initialTitle={renameSession?.title ?? null}
+        onClose={() => setRenameSessionId(null)}
+        onSave={async (title) => {
+          if (!renameSession) return;
+          await getApiClient().updateSession(renameSession.id, { title });
+          await refreshSessions();
+        }}
+      />
     </Screen>
   );
 }

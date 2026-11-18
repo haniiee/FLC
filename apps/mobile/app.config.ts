@@ -60,6 +60,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-secure-store",
     "expo-font",
     [
+      "expo-audio",
+      {
+        enableBackgroundPlayback: true,
+        enableBackgroundRecording: false,
+      },
+    ],
+    [
       "expo-splash-screen",
       {
         backgroundColor: "#0F1E4A",

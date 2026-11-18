@@ -1,4 +1,4 @@
-import type { FileKind } from "@app/shared-types";
+import type { FileKind } from "./content";
 
 export function sessionDisplayName(input: { number: number; title: string | null }): string {
   return input.title ?? `Session ${input.number}`;

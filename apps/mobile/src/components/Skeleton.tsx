@@ -71,6 +71,27 @@ export function ClassesSkeletonList() {
   );
 }
 
+export function SessionCardSkeleton() {
+  return (
+    <Card>
+      <View style={{ gap: 8 }}>
+        <ShimmerBlock height={16} width="60%" />
+        <ShimmerBlock height={12} width="45%" />
+      </View>
+    </Card>
+  );
+}
+
+export function SessionsSkeletonList() {
+  return (
+    <View style={{ gap: 12 }}>
+      <SessionCardSkeleton />
+      <SessionCardSkeleton />
+      <SessionCardSkeleton />
+    </View>
+  );
+}
+
 export function LoadingScreen() {
   const { colors } = useTheme();
   return (

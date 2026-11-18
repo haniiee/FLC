@@ -20,6 +20,7 @@ import { avatarColorFromName, contrastingInk } from "../../../lib/avatar-color";
 import { copy } from "../../../lib/copy";
 import { firstName, initials, roleLabel } from "../../../lib/format";
 import { useTabScrollToTop } from "../../../lib/use-tab-scroll-to-top";
+import { useMiniPlayerPadding } from "../../../player/MiniPlayer";
 import { useAuth } from "../../../providers/auth-provider";
 import { useTheme } from "../../../theme/theme";
 
@@ -77,6 +78,7 @@ function ClassRow({
 export default function ClassesScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
+  const miniPad = useMiniPlayerPadding();
   const reduceMotion = useReducedMotion();
   const listRef = useRef<FlatList>(null);
   useTabScrollToTop(listRef);
@@ -142,7 +144,7 @@ export default function ClassesScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={{
             paddingHorizontal: 16,
-            paddingBottom: 32,
+            paddingBottom: 32 + miniPad,
             flexGrow: 1,
           }}
           refreshControl={

@@ -22,6 +22,7 @@ type ThemeContextValue = {
   isDark: boolean;
   setPreference: (value: AppearancePreference) => void;
   cardShadow: typeof tokens.shadows.light.card | null;
+  spacing: (typeof tokens)["spacing"];
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -55,6 +56,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       isDark,
       setPreference,
       cardShadow: isDark ? null : tokens.shadows.light.card,
+      spacing: tokens.spacing,
     };
   }, [mode, preference, setPreference]);
 

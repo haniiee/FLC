@@ -12,6 +12,7 @@ export default [
       "node_modules/**",
       "babel.config.cjs",
       "metro.config.cjs",
+      "expo-env.d.ts",
     ],
   },
 ];

@@ -1,5 +1,5 @@
 import { ApiClientError } from "@app/api-client";
-import type { GroupRole } from "@app/shared-types";
+import type { FileKind, GroupRole } from "@app/shared-types";
 import { copy } from "./copy";
 
 export function roleLabel(role: GroupRole): string {
@@ -10,6 +10,63 @@ export function roleLabel(role: GroupRole): string {
       return copy.classes.roleAssistant;
     case "student":
       return copy.classes.roleStudent;
+  }
+}
+
+export function formatBytes(size: number): string {
+  if (size < 1024) {
+    return `${size} B`;
+  }
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} KB`;
+  }
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function formatDuration(ms: number | null | undefined): string {
+  if (!ms || ms <= 0) {
+    return "";
+  }
+  const totalSec = Math.round(ms / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${min}:${sec.toString().padStart(2, "0")}`;
+}
+
+export function kindLabel(kind: FileKind): string {
+  switch (kind) {
+    case "audio":
+      return copy.content.kindAudio;
+    case "pdf":
+      return copy.content.kindPdf;
+    case "image":
+      return copy.content.kindImage;
+    case "video":
+      return copy.content.kindVideo;
+    case "text":
+      return copy.content.kindText;
+  }
+}
+
+export function fileExtensionForKind(kind: FileKind, mimeType?: string | null): string {
+  if (mimeType?.includes("png")) return ".png";
+  if (mimeType?.includes("jpeg") || mimeType?.includes("jpg")) return ".jpg";
+  if (mimeType?.includes("webp")) return ".webp";
+  if (mimeType?.includes("pdf")) return ".pdf";
+  if (mimeType?.includes("mp4")) return ".mp4";
+  if (mimeType?.includes("mpeg") || mimeType?.includes("mp3")) return ".mp3";
+  if (mimeType?.includes("m4a") || mimeType?.includes("mp4a")) return ".m4a";
+  switch (kind) {
+    case "audio":
+      return ".m4a";
+    case "pdf":
+      return ".pdf";
+    case "image":
+      return ".jpg";
+    case "video":
+      return ".mp4";
+    case "text":
+      return ".txt";
   }
 }
 

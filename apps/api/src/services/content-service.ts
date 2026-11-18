@@ -3,7 +3,7 @@ import type { GroupRole } from "@app/shared-types";
 import { db } from "../db";
 import { files, sessions, topics, type FileRow } from "../db/schema";
 import { toFileDto, toSessionSummary, toTopicSummary, visibleFiles } from "../lib/content-mappers";
-import { fileDisplayName, topicDisplayName } from "../lib/display-name";
+import { fileDisplayName, topicDisplayName } from "@app/shared-types";
 import { AppError, badRequest, notFound } from "../lib/errors";
 import { nextFileNumber, nextSessionNumber, nextTopicNumber } from "../lib/numbering";
 import { scheduleProcessAudio } from "../media/process-audio";

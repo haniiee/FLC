@@ -93,6 +93,11 @@ export {
   type PlaylistResponse,
 } from "./content";
 export {
+  sessionDisplayName,
+  topicDisplayName,
+  fileDisplayName,
+} from "./display-name";
+export {
   ChatChannelKindSchema,
   type ChatChannelKind,
   ChatMessageTypeSchema,
