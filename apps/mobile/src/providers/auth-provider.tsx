@@ -5,6 +5,7 @@ import { router, useSegments } from "expo-router";
 import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from "react";
 import { getApiClient } from "../lib/api";
 import { mobileTokenStore } from "../lib/token-store";
+import { disconnectSocket, setSocketUnauthorizedHandler } from "../realtime/socket";
 
 type AuthContextValue = {
   user: User | null;
@@ -66,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   const logout = useCallback(async () => {
+    disconnectSocket();
     try {
       await getApiClient().logout();
     } catch {
@@ -74,6 +76,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryClient.clear();
     router.replace("/login");
   }, [queryClient]);
+
+  useEffect(() => {
+    setSocketUnauthorizedHandler(() => {
+      void logout();
+    });
+    return () => setSocketUnauthorizedHandler(null);
+  }, [logout]);
 
   useEffect(() => {
     if (meQuery.isPending) return;

@@ -26,6 +26,10 @@ export class UploadCanceledError extends Error {
   }
 }
 
+export async function readLocalFileSize(uri: string, name = "upload.bin"): Promise<number> {
+  return resolveSizeBytes({ uri, name });
+}
+
 async function resolveSizeBytes(asset: LocalFileAsset): Promise<number> {
   if (asset.size != null && asset.size > 0) {
     return asset.size;
@@ -39,7 +43,7 @@ async function resolveSizeBytes(asset: LocalFileAsset): Promise<number> {
   return blob.size;
 }
 
-async function putLocalFile(
+export async function putLocalFile(
   uploadUrl: string,
   uri: string,
   mimeType: string,

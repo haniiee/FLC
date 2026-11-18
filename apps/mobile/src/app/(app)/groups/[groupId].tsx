@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams, type Href } from "expo-router";
 import { ArrowLeft, BookOpen, ChevronRight } from "lucide-react-native";
 import { useState } from "react";
 import { Alert, Pressable, RefreshControl, ScrollView, View } from "react-native";
@@ -17,6 +17,12 @@ import { MoreOptionsButton } from "../../../components/MoreOptionsButton";
 import { Screen } from "../../../components/Screen";
 import { SessionsSkeletonList } from "../../../components/Skeleton";
 import { getApiClient } from "../../../lib/api";
+import {
+  channelLabel,
+  channelPath,
+  lastMessagePreview,
+  sortChannels,
+} from "../../../lib/chat-logic";
 import { canManageContent } from "../../../lib/content-permissions";
 import { copy } from "../../../lib/copy";
 import { apiErrorMessage, roleLabel } from "../../../lib/format";
@@ -44,6 +50,13 @@ export default function GroupDetailScreen() {
     enabled: Boolean(groupId),
   });
 
+  const chatsQuery = useQuery({
+    queryKey: ["chats", groupId],
+    queryFn: () => getApiClient().listChats(groupId),
+    enabled: Boolean(groupId),
+  });
+  const channels = sortChannels(chatsQuery.data?.channels ?? []);
+
   const createSession = useMutation({
     mutationFn: () => getApiClient().createSession(groupId),
     onSuccess: async () => {
@@ -60,7 +73,10 @@ export default function GroupDetailScreen() {
   const renameSession = sessions.find((s) => s.id === renameSessionId);
 
   async function refreshSessions() {
-    await queryClient.invalidateQueries({ queryKey: ["sessions", groupId] });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["sessions", groupId] }),
+      queryClient.invalidateQueries({ queryKey: ["chats", groupId] }),
+    ]);
   }
 
   if (groupQuery.isLoading) {
@@ -89,7 +105,10 @@ export default function GroupDetailScreen() {
         contentContainerStyle={{ paddingBottom: (canManage ? 120 : 96) + miniPad }}
         refreshControl={
           <RefreshControl
-            refreshing={sessionsQuery.isRefetching && !sessionsQuery.isLoading}
+            refreshing={
+              (sessionsQuery.isRefetching && !sessionsQuery.isLoading) ||
+              (chatsQuery.isRefetching && !chatsQuery.isLoading)
+            }
             onRefresh={() => void refreshSessions()}
             tintColor={colors.primary}
           />
@@ -133,6 +152,49 @@ export default function GroupDetailScreen() {
         </GradientHero>
 
         <View style={{ paddingHorizontal: spacing[4], paddingTop: spacing[5], gap: spacing[3] }}>
+          {chatsQuery.isError ? (
+            <View style={{ gap: spacing[3] }}>
+              <AppText variant="h2">{copy.group.chat}</AppText>
+              <ErrorBanner message={copy.group.chatLoadFailed} />
+              <Button
+                title={copy.group.retry}
+                onPress={() => void chatsQuery.refetch()}
+                variant="outline"
+              />
+            </View>
+          ) : channels.length > 0 ? (
+            <View style={{ gap: spacing[3] }}>
+              <AppText variant="h2">{copy.group.chat}</AppText>
+              {channels.map((channel) => (
+                <Card
+                  key={channel.id}
+                  pressable
+                  accessibilityLabel={`${copy.group.chat}, ${channelLabel(channel.kind)}`}
+                  onPress={() =>
+                    router.push(
+                      channelPath({
+                        channelId: channel.id,
+                        groupId: group.id,
+                        kind: channel.kind,
+                        groupName: group.name,
+                      }) as Href,
+                    )
+                  }
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing[3] }}>
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <AppText variant="h3">{channelLabel(channel.kind)}</AppText>
+                      <AppText variant="caption" color="textMuted" numberOfLines={1}>
+                        {lastMessagePreview(channel.lastMessage)}
+                      </AppText>
+                    </View>
+                    <ChevronRight size={20} color={colors.textMuted} />
+                  </View>
+                </Card>
+              ))}
+            </View>
+          ) : null}
+
           <AppText variant="h2">{copy.group.sessions}</AppText>
 
           {sessionsQuery.isError ? (
