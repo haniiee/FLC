@@ -1,10 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { copy } from "../../lib/copy";
 import { useTheme } from "../../theme/theme";
 import { AppText } from "../AppText";
 import { Button } from "../Button";
+
+export type ItemSheetAction = {
+  title: string;
+  onPress: () => void | Promise<void>;
+  destructive?: boolean;
+};
 
 type ItemActionsSheetProps = {
   visible: boolean;
@@ -13,6 +19,9 @@ type ItemActionsSheetProps = {
   onDelete?: () => Promise<void>;
   onShare?: () => Promise<void>;
   showShare?: boolean;
+  extraActions?: ItemSheetAction[];
+  deleteConfirmTitle?: string;
+  deleteConfirmMessage?: string;
 };
 
 export function ItemActionsSheet({
@@ -22,11 +31,21 @@ export function ItemActionsSheet({
   onDelete,
   onShare,
   showShare = false,
+  extraActions,
+  deleteConfirmTitle = copy.content.deleteConfirmTitle,
+  deleteConfirmMessage = copy.content.deleteConfirmMessage,
 }: ItemActionsSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!visible) {
+      setConfirming(false);
+      setBusy(false);
+    }
+  }, [visible]);
 
   function closeAll() {
     setConfirming(false);
@@ -55,9 +74,9 @@ export function ItemActionsSheet({
         >
           {confirming && onDelete ? (
             <>
-              <AppText variant="h2">{copy.content.deleteConfirmTitle}</AppText>
+              <AppText variant="h2">{deleteConfirmTitle}</AppText>
               <AppText variant="body" color="textMuted">
-                {copy.content.deleteConfirmMessage}
+                {deleteConfirmMessage}
               </AppText>
               <View style={{ flexDirection: "row", gap: 12, marginTop: 4 }}>
                 <View style={{ flex: 1 }}>
@@ -90,6 +109,17 @@ export function ItemActionsSheet({
             </>
           ) : (
             <>
+              {extraActions?.map((action) => (
+                <Button
+                  key={action.title}
+                  title={action.title}
+                  variant={action.destructive ? "danger" : "secondary"}
+                  onPress={() => {
+                    onClose();
+                    void action.onPress();
+                  }}
+                />
+              ))}
               {onRename ? (
                 <Button
                   title={copy.content.rename}

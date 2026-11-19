@@ -29,6 +29,7 @@ export default function AppLayout() {
         />
         <Stack.Screen name="topics/[topicId]" options={{ headerShown: false, title: "Topic" }} />
         <Stack.Screen name="chats/[channelId]" options={{ headerShown: false, title: "Chat" }} />
+        <Stack.Screen name="playlists/[id]" options={{ headerShown: false, title: "Playlist" }} />
         <Stack.Screen
           name="player"
           options={{

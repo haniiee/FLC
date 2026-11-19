@@ -190,6 +190,11 @@ export async function createDownloadUrl(
   return getSignedUrl(s3Public, command, { expiresIn: options?.expiresIn ?? 3600 });
 }
 
+/** Presigned URL used by session playlists and personal playlists. */
+export function createPlaylistFileUrl(storageKey: string) {
+  return createDownloadUrl(storageKey, { expiresIn: 3600 });
+}
+
 export async function headObject(key: string) {
   return s3.send(
     new HeadObjectCommand({

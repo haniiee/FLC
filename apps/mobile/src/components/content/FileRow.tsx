@@ -1,9 +1,26 @@
-import type { FileDto } from "@app/shared-types";
-import { FileAudio2, FileImage, FileText, FileType, Film, Pause, Play } from "lucide-react-native";
+import type { Bookmark, FileDto } from "@app/shared-types";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Bookmark as BookmarkIcon,
+  Check,
+  FileAudio2,
+  FileImage,
+  FileText,
+  FileType,
+  Film,
+  Pause,
+  Play,
+} from "lucide-react-native";
 import { memo, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, View } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import { getApiClient } from "../../lib/api";
+import {
+  bookmarksForFileQueryKey,
+  bookmarksQueryKey,
+  fileLevelBookmark,
+  isFileBookmarked,
+} from "../../lib/bookmark-logic";
 import { copy } from "../../lib/copy";
 import { apiErrorMessage, formatBytes, formatDuration, kindLabel } from "../../lib/format";
 import { shareFile } from "../../lib/share-file";
@@ -18,6 +35,7 @@ import { AppText } from "../AppText";
 import { Card } from "../Card";
 import { Chip } from "../Chip";
 import { MoreOptionsButton } from "../MoreOptionsButton";
+import { AddToPlaylistSheet } from "./AddToPlaylistSheet";
 import { ImageViewer } from "./ImageViewer";
 import { ItemActionsSheet } from "./ItemActionsSheet";
 import { RenameModal } from "./RenameModal";
@@ -137,11 +155,18 @@ export function UploadingFileRow({ label, progress }: { label: string; progress:
   return <OptimisticFileRow title={label} progress={progress} />;
 }
 
+type FileRowSelection = {
+  selected: boolean;
+  onToggle: () => void;
+};
+
 type FileRowProps = {
   file: FileDto;
   canManage: boolean;
   onChanged: () => void;
   playContext?: PlayAudioContext;
+  /** When set, a ready audio row selects instead of playing. */
+  selection?: FileRowSelection;
 };
 
 export const FileRow = memo(function FileRow({
@@ -149,15 +174,23 @@ export const FileRow = memo(function FileRow({
   canManage,
   onChanged,
   playContext,
+  selection,
 }: FileRowProps) {
   const { colors, spacing } = useTheme();
+  const queryClient = useQueryClient();
   const player = usePlayerOptional();
+  const bookmarkQuery = useQuery({
+    queryKey: bookmarksForFileQueryKey(file.id),
+    queryFn: () => getApiClient().bookmarks.list({ fileId: file.id }),
+  });
+  const bookmarked = isFileBookmarked(bookmarkQuery.data?.items ?? [], file.id);
   const [menuOpen, setMenuOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [opening, setOpening] = useState(false);
   const [reprocessing, setReprocessing] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [textOpen, setTextOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
 
   const playable = file.status === "ready";
   const isCurrent = player?.current?.fileId === file.id;
@@ -197,6 +230,10 @@ export const FileRow = memo(function FileRow({
   }
 
   async function onOpen() {
+    if (selection) {
+      selection.onToggle();
+      return;
+    }
     if (!playable) return;
     if (file.kind === "audio") {
       await onPlayAudio();
@@ -223,6 +260,55 @@ export const FileRow = memo(function FileRow({
     }
   }
 
+  async function toggleBookmark() {
+    const key = bookmarksForFileQueryKey(file.id);
+    await queryClient.cancelQueries({ queryKey: key });
+    const previous = queryClient.getQueryData<{ items: Bookmark[] }>(key);
+    const items = previous?.items ?? [];
+    const plain = fileLevelBookmark(items, file.id);
+    if (plain) {
+      queryClient.setQueryData(key, { items: items.filter((item) => item.id !== plain.id) });
+      try {
+        await getApiClient().bookmarks.remove(plain.id);
+      } catch (error) {
+        queryClient.setQueryData(key, previous);
+        Alert.alert(copy.content.actionFailed, apiErrorMessage(error));
+      }
+    } else {
+      const optimistic: Bookmark = {
+        id: `temp-${file.id}`,
+        fileId: file.id,
+        kind: file.kind,
+        positionMs: null,
+        note: null,
+        createdAt: new Date().toISOString(),
+        available: true,
+        file: {
+          displayName: file.displayName ?? "File",
+          durationMs: file.durationMs,
+          mimeType: file.mimeType,
+          groupId: file.groupId,
+          groupDisplayName: "",
+          sessionId: file.sessionId,
+          sessionDisplayName: "",
+          topicId: file.topicId,
+          topicDisplayName: null,
+        },
+      };
+      queryClient.setQueryData(key, { items: [optimistic, ...items] });
+      try {
+        const created = await getApiClient().bookmarks.create({ fileId: file.id });
+        queryClient.setQueryData(key, {
+          items: [created, ...items.filter((item) => item.positionMs != null)],
+        });
+      } catch (error) {
+        queryClient.setQueryData(key, previous);
+        Alert.alert(copy.content.actionFailed, apiErrorMessage(error));
+      }
+    }
+    await queryClient.invalidateQueries({ queryKey: bookmarksQueryKey });
+  }
+
   async function onReprocess() {
     setReprocessing(true);
     try {
@@ -241,13 +327,35 @@ export const FileRow = memo(function FileRow({
         <View style={{ flexDirection: "row", alignItems: "center", gap: spacing[3] }}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={copy.content.open}
+            accessibilityLabel={
+              selection
+                ? selection.selected
+                  ? copy.library.deselectVoice
+                  : copy.library.selectVoice
+                : copy.content.open
+            }
+            accessibilityState={selection ? { selected: selection.selected } : undefined}
             hitSlop={6}
-            disabled={!playable}
+            disabled={selection ? false : !playable}
             onPress={() => void onOpen()}
             style={{ opacity: opening && file.kind !== "audio" ? 0.6 : 1 }}
           >
-            {opening && file.kind !== "audio" ? (
+            {selection ? (
+              <View
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 12,
+                  borderWidth: 2,
+                  borderColor: selection.selected ? colors.primary : colors.border,
+                  backgroundColor: selection.selected ? colors.primary : "transparent",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {selection.selected ? <Check size={14} color={colors.onPrimary} /> : null}
+              </View>
+            ) : opening && file.kind !== "audio" ? (
               <ActivityIndicator color={colors.primary} />
             ) : (
               <KindIcon kind={file.kind} />
@@ -255,11 +363,23 @@ export const FileRow = memo(function FileRow({
           </Pressable>
           <Pressable
             accessibilityRole="button"
+            accessibilityState={selection ? { selected: selection.selected } : undefined}
             style={{ flex: 1, gap: spacing[1] }}
-            disabled={!playable}
+            disabled={selection ? false : !playable}
             onPress={() => void onOpen()}
           >
-            <AppText variant="h3">{file.displayName}</AppText>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <AppText variant="h3" style={{ flexShrink: 1 }}>
+                {file.displayName}
+              </AppText>
+              {bookmarked ? (
+                <BookmarkIcon
+                  size={14}
+                  color={colors.primary}
+                  accessibilityLabel={copy.library.bookmark}
+                />
+              ) : null}
+            </View>
             <AppText variant="caption" color="textMuted">
               {metaParts.join(" · ")}
             </AppText>
@@ -278,7 +398,7 @@ export const FileRow = memo(function FileRow({
             </View>
           </Pressable>
 
-          {file.kind === "audio" && playable ? (
+          {file.kind === "audio" && playable && !selection ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={isPlayingThis ? copy.content.pause : copy.content.play}
@@ -310,7 +430,9 @@ export const FileRow = memo(function FileRow({
             </Pressable>
           ) : null}
 
-          {canManage || playable ? <MoreOptionsButton onPress={() => setMenuOpen(true)} /> : null}
+          {!selection && (canManage || playable) ? (
+            <MoreOptionsButton onPress={() => setMenuOpen(true)} />
+          ) : null}
         </View>
       </Card>
 
@@ -318,6 +440,15 @@ export const FileRow = memo(function FileRow({
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
         showShare={playable}
+        extraActions={[
+          {
+            title: bookmarked ? copy.library.removeBookmark : copy.library.bookmark,
+            onPress: () => void toggleBookmark(),
+          },
+          ...(file.kind === "audio" && playable
+            ? [{ title: copy.library.addToPlaylist, onPress: () => setAddOpen(true) }]
+            : []),
+        ]}
         onRename={canManage ? () => setRenameOpen(true) : undefined}
         onShare={playable ? async () => shareFile(file) : undefined}
         onDelete={
@@ -339,6 +470,8 @@ export const FileRow = memo(function FileRow({
           onChanged();
         }}
       />
+
+      <AddToPlaylistSheet visible={addOpen} fileIds={[file.id]} onClose={() => setAddOpen(false)} />
 
       <ImageViewer
         visible={Boolean(imageUrl)}

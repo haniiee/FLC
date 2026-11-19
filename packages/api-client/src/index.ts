@@ -27,7 +27,17 @@ import {
   LogoutBodySchema,
   MeResponseSchema,
   OkResponseSchema,
+  BookmarkSchema,
+  BookmarksListResponseSchema,
+  CreateBookmarkBodySchema,
+  UpdateBookmarkBodySchema,
+  AddPlaylistItemsBodySchema,
+  CreatePlaylistBodySchema,
+  PlaylistDetailSchema,
   PlaylistResponseSchema,
+  PlaylistsListResponseSchema,
+  ReorderPlaylistBodySchema,
+  UpdatePlaylistBodySchema,
   PublicInviteSchema,
   RefreshBodySchema,
   RegisterBodySchema,
@@ -56,6 +66,7 @@ import {
   type CreateTextFileBody,
   type CreateTopicBody,
   type FileDto,
+  type FileKind,
   type FileUrlResponse,
   type GroupDetail,
   type GroupMembersResponse,
@@ -68,7 +79,17 @@ import {
   type LoginBody,
   type MeResponse,
   type OkResponse,
+  type Bookmark,
+  type BookmarksListResponse,
+  type CreateBookmarkBody,
+  type UpdateBookmarkBody,
+  type AddPlaylistItemsBody,
+  type CreatePlaylistBody,
+  type PlaylistDetail,
   type PlaylistResponse,
+  type PlaylistsListResponse,
+  type ReorderPlaylistBody,
+  type UpdatePlaylistBody,
   type PublicInvite,
   type RegisterBody,
   type SessionDetail,
@@ -164,6 +185,22 @@ export type ApiClient = {
   updateFile: (id: string, body: UpdateTitleBody) => Promise<FileDto>;
   deleteFile: (id: string) => Promise<OkResponse>;
   getPlaylist: (sessionId: string) => Promise<PlaylistResponse>;
+  playlists: {
+    list: () => Promise<PlaylistsListResponse>;
+    create: (body?: CreatePlaylistBody) => Promise<PlaylistDetail>;
+    get: (id: string) => Promise<PlaylistDetail>;
+    rename: (id: string, body: UpdatePlaylistBody) => Promise<PlaylistDetail>;
+    remove: (id: string) => Promise<void>;
+    addItems: (id: string, body: AddPlaylistItemsBody) => Promise<PlaylistDetail>;
+    removeItem: (id: string, fileId: string) => Promise<PlaylistDetail>;
+    reorder: (id: string, body: ReorderPlaylistBody) => Promise<PlaylistDetail>;
+  };
+  bookmarks: {
+    list: (query?: { fileId?: string; kind?: FileKind }) => Promise<BookmarksListResponse>;
+    create: (body: CreateBookmarkBody) => Promise<Bookmark>;
+    update: (id: string, body: UpdateBookmarkBody) => Promise<Bookmark>;
+    remove: (id: string) => Promise<void>;
+  };
   uploadFile: (input: UploadFileInput) => Promise<FileDto>;
   listChats: (groupId: string) => Promise<ChatChannelsResponse>;
   listChatMessages: (
@@ -279,6 +316,10 @@ export function createApiClient(baseUrl: string, options: ApiClientOptions = {})
       headers,
       body: requestOptions.body !== undefined ? JSON.stringify(requestOptions.body) : undefined,
     });
+
+    if (response.status === 204) {
+      return undefined as T;
+    }
 
     if (response.status === 401 && tokenStore && !requestOptions.skipRefresh) {
       const refreshed = await refreshFromStore();
@@ -487,6 +528,49 @@ export function createApiClient(baseUrl: string, options: ApiClientOptions = {})
     },
     deleteFile: (id) => request(`/files/${id}`, OkResponseSchema, { method: "DELETE" }),
     getPlaylist: (sessionId) => request(`/sessions/${sessionId}/playlist`, PlaylistResponseSchema),
+
+    playlists: {
+      list: () => request("/me/playlists", PlaylistsListResponseSchema),
+      create: (body = {}) => {
+        CreatePlaylistBodySchema.parse(body);
+        return request("/me/playlists", PlaylistDetailSchema, { method: "POST", body });
+      },
+      get: (id) => request(`/playlists/${id}`, PlaylistDetailSchema),
+      rename: (id, body) => {
+        UpdatePlaylistBodySchema.parse(body);
+        return request(`/playlists/${id}`, PlaylistDetailSchema, { method: "PATCH", body });
+      },
+      remove: (id) => request<void>(`/playlists/${id}`, z.void(), { method: "DELETE" }),
+      addItems: (id, body) => {
+        AddPlaylistItemsBodySchema.parse(body);
+        return request(`/playlists/${id}/items`, PlaylistDetailSchema, { method: "POST", body });
+      },
+      removeItem: (id, fileId) =>
+        request(`/playlists/${id}/items/${fileId}`, PlaylistDetailSchema, { method: "DELETE" }),
+      reorder: (id, body) => {
+        ReorderPlaylistBodySchema.parse(body);
+        return request(`/playlists/${id}/order`, PlaylistDetailSchema, { method: "PUT", body });
+      },
+    },
+
+    bookmarks: {
+      list: (query = {}) => {
+        const params = new URLSearchParams();
+        if (query.fileId) params.set("fileId", query.fileId);
+        if (query.kind) params.set("kind", query.kind);
+        const qs = params.toString();
+        return request(`/me/bookmarks${qs ? `?${qs}` : ""}`, BookmarksListResponseSchema);
+      },
+      create: (body) => {
+        CreateBookmarkBodySchema.parse(body);
+        return request("/me/bookmarks", BookmarkSchema, { method: "POST", body });
+      },
+      update: (id, body) => {
+        UpdateBookmarkBodySchema.parse(body);
+        return request(`/bookmarks/${id}`, BookmarkSchema, { method: "PATCH", body });
+      },
+      remove: (id) => request<void>(`/bookmarks/${id}`, z.void(), { method: "DELETE" }),
+    },
 
     listChats: (groupId) => request(`/groups/${groupId}/chats`, ChatChannelsResponseSchema),
     listChatMessages: (channelId, query = {}) => {

@@ -11,6 +11,7 @@ type RenameModalProps = {
   visible: boolean;
   initialTitle: string | null;
   title?: string;
+  label?: string;
   onClose: () => void;
   onSave: (title: string | null) => Promise<void>;
 };
@@ -19,6 +20,7 @@ export function RenameModal({
   visible,
   initialTitle,
   title = copy.content.renameTitle,
+  label = copy.content.title,
   onClose,
   onSave,
 }: RenameModalProps) {
@@ -55,7 +57,7 @@ export function RenameModal({
         >
           <AppText variant="h2">{title}</AppText>
           <Input
-            label={copy.content.title}
+            label={label}
             value={value}
             onChangeText={setValue}
             autoFocus

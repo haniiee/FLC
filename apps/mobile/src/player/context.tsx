@@ -12,7 +12,11 @@ export type PlayerState = {
 };
 
 export type PlayerApi = PlayerState & {
-  playQueue: (items: PlayerQueueItem[], startIndex: number) => Promise<void>;
+  playQueue: (
+    items: PlayerQueueItem[],
+    startIndex: number,
+    startPositionMs?: number,
+  ) => Promise<void>;
   /** Explicit user pick from Up next — resume allowed for that file. */
   playIndex: (index: number) => void;
   toggle: () => void;

@@ -18,6 +18,7 @@ import {
   baseMime,
   buildStorageKey,
   createDownloadUrl,
+  createPlaylistFileUrl,
   createUploadUrl,
   deleteStorageKeys,
   extensionForMime,
@@ -610,7 +611,7 @@ export async function getPlaylist(sessionId: string) {
       fileId: file.id,
       displayName,
       durationMs: file.durationMs,
-      url: await createDownloadUrl(file.storageKey, { expiresIn: 3600 }),
+      url: await createPlaylistFileUrl(file.storageKey),
     });
   }
 
@@ -624,7 +625,7 @@ export async function getPlaylist(sessionId: string) {
         displayName,
         topicDisplayName: topicDisplayName(topic),
         durationMs: file.durationMs,
-        url: await createDownloadUrl(file.storageKey, { expiresIn: 3600 }),
+        url: await createPlaylistFileUrl(file.storageKey),
       });
     }
   }

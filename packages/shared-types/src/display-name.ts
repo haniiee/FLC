@@ -1,5 +1,9 @@
 import type { FileKind } from "./content";
 
+export function playlistDisplayName(input: { number: number; title: string | null }): string {
+  return input.title ?? `Playlist ${input.number}`;
+}
+
 export function sessionDisplayName(input: { number: number; title: string | null }): string {
   return input.title ?? `Session ${input.number}`;
 }

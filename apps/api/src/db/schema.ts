@@ -157,10 +157,72 @@ export const files = pgTable(
   ],
 );
 
+export const playlists = pgTable(
+  "playlists",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    number: integer("number").notNull(),
+    title: text("title"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [unique("playlists_owner_number_uq").on(table.ownerId, table.number)],
+);
+
+export const playlistItems = pgTable(
+  "playlist_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    playlistId: uuid("playlist_id")
+      .notNull()
+      .references(() => playlists.id, { onDelete: "cascade" }),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => files.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("playlist_items_playlist_file_uq").on(table.playlistId, table.fileId),
+    index("playlist_items_playlist_position_idx").on(table.playlistId, table.position),
+  ],
+);
+
+export const bookmarks = pgTable(
+  "bookmarks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => files.id, { onDelete: "cascade" }),
+    positionMs: integer("position_ms"),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("bookmarks_user_file_plain_uq")
+      .on(table.userId, table.fileId)
+      .where(sql`${table.positionMs} is null`),
+    uniqueIndex("bookmarks_user_file_position_uq")
+      .on(table.userId, table.fileId, table.positionMs)
+      .where(sql`${table.positionMs} is not null`),
+    index("bookmarks_user_created_idx").on(table.userId, table.createdAt.desc()),
+  ],
+);
+
 export const usersRelations = relations(users, ({ many }) => ({
   ownedGroups: many(groups),
   memberships: many(groupMembers),
   refreshTokens: many(refreshTokens),
+  playlists: many(playlists),
+  bookmarks: many(bookmarks),
 }));
 
 export const groupsRelations = relations(groups, ({ one, many }) => ({
@@ -228,7 +290,37 @@ export const topicsRelations = relations(topics, ({ one, many }) => ({
   files: many(files),
 }));
 
-export const filesRelations = relations(files, ({ one }) => ({
+export const playlistsRelations = relations(playlists, ({ one, many }) => ({
+  owner: one(users, {
+    fields: [playlists.ownerId],
+    references: [users.id],
+  }),
+  items: many(playlistItems),
+}));
+
+export const playlistItemsRelations = relations(playlistItems, ({ one }) => ({
+  playlist: one(playlists, {
+    fields: [playlistItems.playlistId],
+    references: [playlists.id],
+  }),
+  file: one(files, {
+    fields: [playlistItems.fileId],
+    references: [files.id],
+  }),
+}));
+
+export const bookmarksRelations = relations(bookmarks, ({ one }) => ({
+  user: one(users, {
+    fields: [bookmarks.userId],
+    references: [users.id],
+  }),
+  file: one(files, {
+    fields: [bookmarks.fileId],
+    references: [files.id],
+  }),
+}));
+
+export const filesRelations = relations(files, ({ one, many }) => ({
   group: one(groups, {
     fields: [files.groupId],
     references: [groups.id],
@@ -245,6 +337,7 @@ export const filesRelations = relations(files, ({ one }) => ({
     fields: [files.uploadedBy],
     references: [users.id],
   }),
+  bookmarks: many(bookmarks),
 }));
 
 export const chatChannels = pgTable(

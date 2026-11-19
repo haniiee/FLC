@@ -1,6 +1,6 @@
 import { Tabs } from "expo-router";
 import { PlatformPressable } from "expo-router/react-navigation";
-import { GraduationCap, MessagesSquare, UserRound } from "lucide-react-native";
+import { GraduationCap, ListMusic, MessagesSquare, UserRound } from "lucide-react-native";
 import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
@@ -98,6 +98,15 @@ export default function TabsLayout() {
           title: copy.chats.title,
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused} color={String(color)} Icon={MessagesSquare} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="library"
+        options={{
+          title: copy.library.title,
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon focused={focused} color={String(color)} Icon={ListMusic} />
           ),
         }}
       />

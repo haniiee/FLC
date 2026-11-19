@@ -73,6 +73,9 @@ type PlayerRuntime = {
   expectingPlayback: MutableRefObject<boolean>;
   resumeAllowedFor: MutableRefObject<string | null>;
   pendingResumeFileId: MutableRefObject<string | null>;
+  /** Seek here once the new queue has loaded. Skips the saved resume position. */
+  startAtSec: MutableRefObject<number | null>;
+  startHoldUntil: MutableRefObject<number>;
   resumedFileIds: MutableRefObject<Set<string>>;
   lastPosByFileRef: MutableRefObject<Record<string, { time: number; duration: number }>>;
   rebuildingRef: MutableRefObject<boolean>;
@@ -112,6 +115,8 @@ export function PlayerProvider({ children }: PlayerProviderProps) {
   /** Only this fileId may receive resume (set by playQueue / playIndex). */
   const resumeAllowedFor = useRef<string | null>(null);
   const pendingResumeFileId = useRef<string | null>(null);
+  const startAtSec = useRef<number | null>(null);
+  const startHoldUntil = useRef(0);
   const resumedFileIds = useRef(new Set<string>());
   const lastPosByFileRef = useRef<Record<string, { time: number; duration: number }>>({});
   const rebuildingRef = useRef(false);
@@ -142,6 +147,8 @@ export function PlayerProvider({ children }: PlayerProviderProps) {
       expectingPlayback,
       resumeAllowedFor,
       pendingResumeFileId,
+      startAtSec,
+      startHoldUntil,
       resumedFileIds,
       lastPosByFileRef,
       rebuildingRef,
@@ -278,17 +285,32 @@ export function PlayerProvider({ children }: PlayerProviderProps) {
   }, []);
 
   const playQueue = useCallback(
-    async (items: PlayerQueueItem[], startIndex: number) => {
+    async (items: PlayerQueueItem[], startIndex: number, startPositionMs?: number) => {
       if (items.length === 0) return;
       const live = playlistRef.current;
       const start = Math.max(0, Math.min(startIndex, items.length - 1));
       const startItem = items[start]!;
+      const hasStart =
+        typeof startPositionMs === "number" &&
+        Number.isFinite(startPositionMs) &&
+        startPositionMs >= 0;
       setQueue(items);
       queueRef.current = items;
       // Mark resume target before mutating sources so trackChanged cannot clear it.
-      resumeAllowedFor.current = startItem.fileId;
-      resumedFileIds.current.delete(startItem.fileId);
-      pendingResumeFileId.current = startItem.fileId;
+      if (hasStart) {
+        const startSec = startPositionMs / 1000;
+        resumeAllowedFor.current = null;
+        pendingResumeFileId.current = null;
+        startAtSec.current = startSec;
+        positionRef.current = startSec;
+        positionHold.current = startSec;
+      } else {
+        startAtSec.current = null;
+        startHoldUntil.current = 0;
+        resumeAllowedFor.current = startItem.fileId;
+        resumedFileIds.current.delete(startItem.fileId);
+        pendingResumeFileId.current = startItem.fileId;
+      }
       replaceSources(items);
       live.loop = repeatToLoopMode(repeatRef.current);
       live.playbackRate = rateRef.current;
@@ -296,7 +318,7 @@ export function PlayerProvider({ children }: PlayerProviderProps) {
       indexRef.current = start;
       commandedIndex.current = start;
       commandAt.current = Date.now();
-      positionRef.current = 0;
+      if (!hasStart) positionRef.current = 0;
       setIndex(start);
       setResumeToken((value) => value + 1);
       expectingPlayback.current = true;
@@ -317,6 +339,8 @@ export function PlayerProvider({ children }: PlayerProviderProps) {
       resumeAllowedFor.current = item.fileId;
       resumedFileIds.current.delete(item.fileId);
       pendingResumeFileId.current = item.fileId;
+      startAtSec.current = null;
+      startHoldUntil.current = 0;
       live.skipTo(nextIndex);
       indexRef.current = nextIndex;
       commandedIndex.current = nextIndex;
@@ -410,6 +434,8 @@ export function PlayerProvider({ children }: PlayerProviderProps) {
       publishProgress(0);
       resumeAllowedFor.current = null;
       pendingResumeFileId.current = null;
+      startAtSec.current = null;
+      startHoldUntil.current = 0;
       const wasPlaying = live.playing;
       live.skipTo(step.index);
       live.playbackRate = rateRef.current;
@@ -541,6 +567,12 @@ export function PlayerProvider({ children }: PlayerProviderProps) {
       if (allowResume) {
         pendingResumeFileId.current = item.fileId;
         setResumeToken((value) => value + 1);
+      } else if (startAtSec.current != null || Date.now() < startHoldUntil.current) {
+        const target = startAtSec.current;
+        if (target != null) {
+          positionRef.current = target;
+          positionHold.current = target;
+        }
       } else {
         pendingResumeFileId.current = null;
         resumeAllowedFor.current = null;
@@ -704,6 +736,23 @@ function PlayerStatusSync({
     runtime.expectingPlayback.current = true;
     playlist.play();
   }, [playlist, runtime, status.currentIndex, status.didJustFinish]);
+
+  useEffect(() => {
+    const target = runtime.startAtSec.current;
+    if (target == null) return;
+    if (!(status.isLoaded || status.duration > 0)) return;
+    if (!runtime.aliveRef.current || runtime.playlistRef.current !== playlist) return;
+    runtime.startAtSec.current = null;
+    runtime.startHoldUntil.current = Date.now() + 1500;
+    runtime.positionRef.current = target;
+    runtime.positionHold.current = target;
+    runtime.progress.publish({
+      position: target,
+      duration: status.duration,
+      isBuffering: status.isBuffering,
+    });
+    void playlist.seekTo(target).catch(() => undefined);
+  }, [playlist, runtime, status.duration, status.isBuffering, status.isLoaded]);
 
   useEffect(() => {
     const ready = status.isLoaded || status.duration > 0 || status.playing;

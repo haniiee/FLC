@@ -19,6 +19,8 @@ import { contentRoutes } from "./routes/content";
 import { groupRoutes } from "./routes/groups";
 import { healthRoutes } from "./routes/health";
 import { inviteRoutes } from "./routes/invites";
+import { bookmarkRoutes } from "./routes/bookmarks";
+import { playlistRoutes } from "./routes/playlists";
 
 export async function buildApp(options?: { logger?: boolean }): Promise<FastifyInstance> {
   const app = Fastify({
@@ -105,6 +107,8 @@ export async function buildApp(options?: { logger?: boolean }): Promise<FastifyI
   await app.register(groupRoutes);
   await app.register(inviteRoutes);
   await app.register(contentRoutes);
+  await app.register(playlistRoutes);
+  await app.register(bookmarkRoutes);
   await app.register(chatRoutes);
 
   app.addHook("onReady", async () => {

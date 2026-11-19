@@ -1,6 +1,7 @@
 import {
   Check,
   ChevronDown,
+  ListPlus,
   Pause,
   Play,
   Repeat,
@@ -15,6 +16,8 @@ import { Modal, Pressable, ScrollView, View } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppText } from "../../components/AppText";
+import { AddToPlaylistSheet } from "../../components/content/AddToPlaylistSheet";
+import { BookmarkMomentButton } from "../../components/content/BookmarkMomentButton";
 import { GradientHero } from "../../components/GradientHero";
 import { Screen } from "../../components/Screen";
 import { SeekBar } from "../../components/SeekBar";
@@ -63,6 +66,7 @@ export default function FullPlayerScreen() {
   const insets = useSafeAreaInsets();
   const current = player.current;
   const [speedOpen, setSpeedOpen] = useState(false);
+  const [addFileId, setAddFileId] = useState<string | null>(null);
 
   const upNext = upNextItems(player.queue, player.index, player.repeat);
   const emptyLabel = upNextLabelText(upNext.label);
@@ -242,6 +246,21 @@ export default function FullPlayerScreen() {
             </Pressable>
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel={copy.library.addToPlaylist}
+              hitSlop={8}
+              onPress={() => setAddFileId(current.fileId)}
+              style={{
+                width: 48,
+                height: 48,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <ListPlus size={22} color={colors.text} />
+            </Pressable>
+            <BookmarkMomentButton fileId={current.fileId} />
+            <Pressable
+              accessibilityRole="button"
               accessibilityLabel={`Speed ${player.rate}x`}
               onPress={() => setSpeedOpen(true)}
               style={{
@@ -384,6 +403,11 @@ export default function FullPlayerScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+      <AddToPlaylistSheet
+        visible={addFileId != null}
+        fileIds={addFileId ? [addFileId] : []}
+        onClose={() => setAddFileId(null)}
+      />
     </Screen>
   );
 }

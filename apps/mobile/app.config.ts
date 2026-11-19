@@ -51,6 +51,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
             host: "join",
             pathPrefix: "/",
           },
+          {
+            scheme: "flc",
+            host: "playlists",
+            pathPrefix: "/",
+          },
+          {
+            scheme: "flc",
+            host: "library",
+            pathPrefix: "/",
+          },
         ],
       },
     ],

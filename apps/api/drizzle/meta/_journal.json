@@ -36,6 +36,20 @@
       "when": 1794989414412,
       "tag": "0004_secret_loners",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795070085267,
+      "tag": "0005_skinny_joystick",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795074395602,
+      "tag": "0006_wealthy_shen",
+      "breakpoints": true
     }
   ]
 }

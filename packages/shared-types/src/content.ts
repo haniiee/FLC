@@ -142,3 +142,111 @@ export const PlaylistResponseSchema = z.object({
   items: z.array(PlaylistItemSchema),
 });
 export type PlaylistResponse = z.infer<typeof PlaylistResponseSchema>;
+
+const PlaylistTitleSchema = z.string().trim().min(1).max(200);
+
+export const PlaylistSummarySchema = z.object({
+  id: z.string().uuid(),
+  number: z.number().int().positive(),
+  title: z.string().nullable(),
+  displayName: z.string(),
+  itemCount: z.number().int().nonnegative(),
+  totalDurationMs: z.number().int().nonnegative(),
+  updatedAt: z.string().datetime(),
+});
+export type PlaylistSummary = z.infer<typeof PlaylistSummarySchema>;
+
+export const PlaylistTrackSchema = z.object({
+  fileId: z.string().uuid(),
+  displayName: z.string(),
+  topicDisplayName: z.string().optional(),
+  durationMs: z.number().int().nonnegative().nullable(),
+  url: z.string().url().optional(),
+  groupId: z.string().uuid(),
+  groupDisplayName: z.string(),
+  sessionDisplayName: z.string(),
+  available: z.boolean(),
+});
+export type PlaylistTrack = z.infer<typeof PlaylistTrackSchema>;
+
+export const PlaylistDetailSchema = PlaylistSummarySchema.extend({
+  items: z.array(PlaylistTrackSchema),
+});
+export type PlaylistDetail = z.infer<typeof PlaylistDetailSchema>;
+
+export const PlaylistsListResponseSchema = z.object({
+  items: z.array(PlaylistSummarySchema),
+});
+export type PlaylistsListResponse = z.infer<typeof PlaylistsListResponseSchema>;
+
+export const CreatePlaylistBodySchema = z.object({
+  title: PlaylistTitleSchema.optional(),
+  fileIds: z.array(z.string().uuid()).max(500).optional(),
+});
+export type CreatePlaylistBody = z.infer<typeof CreatePlaylistBodySchema>;
+
+export const UpdatePlaylistBodySchema = z.object({
+  title: PlaylistTitleSchema.nullable(),
+});
+export type UpdatePlaylistBody = z.infer<typeof UpdatePlaylistBodySchema>;
+
+export const AddPlaylistItemsBodySchema = z.object({
+  fileIds: z.array(z.string().uuid()).min(1).max(100),
+});
+export type AddPlaylistItemsBody = z.infer<typeof AddPlaylistItemsBodySchema>;
+
+export const ReorderPlaylistBodySchema = z.object({
+  fileIds: z.array(z.string().uuid()).max(500),
+});
+export type ReorderPlaylistBody = z.infer<typeof ReorderPlaylistBodySchema>;
+
+const BookmarkNoteSchema = z.string().trim().max(500);
+
+export const BookmarkFileSchema = z.object({
+  displayName: z.string(),
+  durationMs: z.number().int().nonnegative().nullable(),
+  mimeType: z.string(),
+  groupId: z.string().uuid(),
+  groupDisplayName: z.string(),
+  sessionId: z.string().uuid(),
+  sessionDisplayName: z.string(),
+  topicId: z.string().uuid().nullable(),
+  topicDisplayName: z.string().nullable(),
+});
+export type BookmarkFile = z.infer<typeof BookmarkFileSchema>;
+
+export const BookmarkSchema = z.object({
+  id: z.string().uuid(),
+  fileId: z.string().uuid(),
+  kind: FileKindSchema,
+  positionMs: z.number().int().nonnegative().nullable(),
+  note: z.string().nullable(),
+  createdAt: z.string().datetime(),
+  available: z.boolean(),
+  file: BookmarkFileSchema,
+  url: z.string().url().optional(),
+});
+export type Bookmark = z.infer<typeof BookmarkSchema>;
+
+export const BookmarksListResponseSchema = z.object({
+  items: z.array(BookmarkSchema),
+});
+export type BookmarksListResponse = z.infer<typeof BookmarksListResponseSchema>;
+
+export const CreateBookmarkBodySchema = z.object({
+  fileId: z.string().uuid(),
+  positionMs: z.number().int().nonnegative().optional(),
+  note: BookmarkNoteSchema.nullable().optional(),
+});
+export type CreateBookmarkBody = z.infer<typeof CreateBookmarkBodySchema>;
+
+export const UpdateBookmarkBodySchema = z.object({
+  note: BookmarkNoteSchema.nullable(),
+});
+export type UpdateBookmarkBody = z.infer<typeof UpdateBookmarkBodySchema>;
+
+export const BookmarksQuerySchema = z.object({
+  fileId: z.string().uuid().optional(),
+  kind: FileKindSchema.optional(),
+});
+export type BookmarksQuery = z.infer<typeof BookmarksQuerySchema>;

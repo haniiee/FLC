@@ -1,7 +1,7 @@
 import { and, eq, isNull, max, ne, sql } from "drizzle-orm";
 import type { FileKind } from "@app/shared-types";
 import { db } from "../db";
-import { files, sessions, topics } from "../db/schema";
+import { files, playlists, sessions, topics } from "../db/schema";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -11,6 +11,15 @@ export async function nextSessionNumber(tx: Tx, groupId: string): Promise<number
     .select({ value: max(sessions.number) })
     .from(sessions)
     .where(eq(sessions.groupId, groupId));
+  return (row?.value ?? 0) + 1;
+}
+
+export async function nextPlaylistNumber(tx: Tx, ownerId: string): Promise<number> {
+  await tx.execute(sql`select id from users where id = ${ownerId} for update`);
+  const [row] = await tx
+    .select({ value: max(playlists.number) })
+    .from(playlists)
+    .where(eq(playlists.ownerId, ownerId));
   return (row?.value ?? 0) + 1;
 }
 

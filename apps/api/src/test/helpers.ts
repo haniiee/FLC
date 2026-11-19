@@ -8,6 +8,9 @@ export async function resetDb(): Promise<void> {
   await db.execute(
     drizzleSql.raw(`
     TRUNCATE TABLE
+      bookmarks,
+      playlist_items,
+      playlists,
       chat_messages,
       chat_channels,
       files,
