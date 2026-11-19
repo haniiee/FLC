@@ -1,35 +1,67 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { LayoutChangeEvent, PanResponder, View } from "react-native";
 import { useTheme } from "../theme/theme";
 
 type SeekBarProps = {
   value: number;
   maximumValue: number;
+  onSlidingStart?: (value: number) => void;
+  onValueChange?: (value: number) => void;
   onSlidingComplete: (value: number) => void;
 };
 
-export function SeekBar({ value, maximumValue, onSlidingComplete }: SeekBarProps) {
+export function SeekBar({
+  value,
+  maximumValue,
+  onSlidingStart,
+  onValueChange,
+  onSlidingComplete,
+}: SeekBarProps) {
   const { colors } = useTheme();
   const widthRef = useRef(1);
   const maxRef = useRef(maximumValue);
   maxRef.current = Math.max(maximumValue, 0.001);
+  const callbacks = useRef({ onSlidingStart, onValueChange, onSlidingComplete });
+  callbacks.current = { onSlidingStart, onValueChange, onSlidingComplete };
+  const [dragging, setDragging] = useState(false);
+  const [dragValue, setDragValue] = useState(0);
+
+  function valueFromX(x: number) {
+    const ratio = Math.min(1, Math.max(0, x / widthRef.current));
+    return ratio * maxRef.current;
+  }
 
   const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (evt) => {
-        const ratio = Math.min(1, Math.max(0, evt.nativeEvent.locationX / widthRef.current));
-        onSlidingComplete(ratio * maxRef.current);
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (event) => {
+        const next = valueFromX(event.nativeEvent.locationX);
+        setDragging(true);
+        setDragValue(next);
+        callbacks.current.onSlidingStart?.(next);
+        callbacks.current.onValueChange?.(next);
       },
-      onPanResponderRelease: (evt) => {
-        const ratio = Math.min(1, Math.max(0, evt.nativeEvent.locationX / widthRef.current));
-        onSlidingComplete(ratio * maxRef.current);
+      onPanResponderMove: (event) => {
+        const next = valueFromX(event.nativeEvent.locationX);
+        setDragValue(next);
+        callbacks.current.onValueChange?.(next);
+      },
+      onPanResponderRelease: (event) => {
+        const next = valueFromX(event.nativeEvent.locationX);
+        setDragging(false);
+        callbacks.current.onSlidingComplete(next);
+      },
+      onPanResponderTerminate: () => {
+        setDragging(false);
       },
     }),
   ).current;
 
-  const progress = Math.min(1, Math.max(0, value / maxRef.current));
+  const shown = dragging ? dragValue : value;
+  const progress = Math.min(1, Math.max(0, shown / maxRef.current));
+  const thumb = dragging ? 18 : 14;
 
   function onLayout(event: LayoutChangeEvent) {
     widthRef.current = Math.max(1, event.nativeEvent.layout.width);
@@ -39,15 +71,16 @@ export function SeekBar({ value, maximumValue, onSlidingComplete }: SeekBarProps
     <View
       onLayout={onLayout}
       {...pan.panHandlers}
-      style={{ height: 28, justifyContent: "center" }}
+      style={{ height: 44, justifyContent: "center" }}
       accessibilityRole="adjustable"
       accessibilityValue={{
         min: 0,
         max: Math.round(maxRef.current),
-        now: Math.round(value),
+        now: Math.round(shown),
       }}
     >
       <View
+        pointerEvents="none"
         style={{
           height: 4,
           borderRadius: 2,
@@ -68,10 +101,10 @@ export function SeekBar({ value, maximumValue, onSlidingComplete }: SeekBarProps
         style={{
           position: "absolute",
           left: `${progress * 100}%`,
-          marginLeft: -7,
-          width: 14,
-          height: 14,
-          borderRadius: 7,
+          marginLeft: -thumb / 2,
+          width: thumb,
+          height: thumb,
+          borderRadius: thumb / 2,
           backgroundColor: colors.primary,
         }}
       />

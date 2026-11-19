@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import type { FileDto } from "@app/shared-types";
+import { PLAYBACK_RATES } from "./types";
 import {
+  DEFAULT_REPEAT_MODE,
   buildQueue,
+  clampSkipPosition,
   cycleRepeat,
   cycleSpeed,
   isAtEnd,
+  normalizePlaybackRate,
+  normalizeRepeatMode,
+  previousAction,
   shouldApplyResume,
+  stepTransport,
   shouldResume,
   upNextItems,
 } from "./logic";
@@ -76,11 +83,121 @@ describe("cycleRepeat", () => {
 
 describe("cycleSpeed", () => {
   it("cycles through supported rates", () => {
+    expect(PLAYBACK_RATES).toEqual([0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]);
+    expect(cycleSpeed(0.5)).toBe(0.75);
     expect(cycleSpeed(0.75)).toBe(1);
     expect(cycleSpeed(1)).toBe(1.25);
     expect(cycleSpeed(1.25)).toBe(1.5);
-    expect(cycleSpeed(1.5)).toBe(2);
-    expect(cycleSpeed(2)).toBe(0.75);
+    expect(cycleSpeed(1.5)).toBe(1.75);
+    expect(cycleSpeed(1.75)).toBe(2);
+    expect(cycleSpeed(2)).toBe(0.5);
+  });
+
+  it("falls back to 1x when a saved rate is no longer supported", () => {
+    expect(normalizePlaybackRate(1.25)).toBe(1.25);
+    expect(normalizePlaybackRate(1.1)).toBe(1);
+    expect(normalizePlaybackRate(Number.NaN)).toBe(1);
+  });
+});
+
+describe("repeat default", () => {
+  it("is all when nothing valid is stored", () => {
+    expect(DEFAULT_REPEAT_MODE).toBe("all");
+    expect(normalizeRepeatMode(null)).toBe("all");
+    expect(normalizeRepeatMode(undefined)).toBe("all");
+    expect(normalizeRepeatMode("off")).toBe("off");
+  });
+});
+
+describe("clampSkipPosition", () => {
+  it("clamps the start, the middle, and the end of a track", () => {
+    expect(clampSkipPosition(3, -10, 100)).toBe(0);
+    expect(clampSkipPosition(40, 10, 100)).toBe(50);
+    expect(clampSkipPosition(98, 10, 100)).toBe(99.5);
+  });
+});
+
+describe("previousAction", () => {
+  it("restarts after 3s, steps back, and wraps the first track only when repeat is all", () => {
+    expect(previousAction({ positionSec: 4, index: 2, queueLength: 3, repeat: "off" })).toBe(
+      "restart",
+    );
+    expect(previousAction({ positionSec: 1, index: 2, queueLength: 3, repeat: "off" })).toBe(
+      "previous",
+    );
+    expect(previousAction({ positionSec: 1, index: 0, queueLength: 3, repeat: "all" })).toBe(
+      "wrap-to-last",
+    );
+    expect(previousAction({ positionSec: 1, index: 0, queueLength: 3, repeat: "off" })).toBe(
+      "restart",
+    );
+  });
+});
+
+describe("stepTransport", () => {
+  it("applies a burst of previous and next from the index ref", () => {
+    const indexRef = { current: 3 };
+    const positionRef = { current: 1 };
+    for (let step = 0; step < 3; step += 1) {
+      const next = stepTransport(
+        {
+          index: indexRef.current,
+          positionSec: positionRef.current,
+          queueLength: 4,
+          repeat: "all",
+        },
+        "previous",
+      );
+      indexRef.current = next.index;
+      positionRef.current = next.positionSec;
+    }
+    expect(indexRef.current).toBe(0);
+    expect(positionRef.current).toBe(0);
+
+    for (let step = 0; step < 3; step += 1) {
+      const next = stepTransport(
+        {
+          index: indexRef.current,
+          positionSec: positionRef.current,
+          queueLength: 4,
+          repeat: "all",
+        },
+        "next",
+      );
+      indexRef.current = next.index;
+      positionRef.current = next.positionSec;
+    }
+    expect(indexRef.current).toBe(3);
+  });
+
+  it("writes position 0 on restart so the following previous changes track", () => {
+    const indexRef = { current: 3 };
+    const positionRef = { current: 12 };
+    const restart = stepTransport(
+      {
+        index: indexRef.current,
+        positionSec: positionRef.current,
+        queueLength: 4,
+        repeat: "all",
+      },
+      "previous",
+    );
+    indexRef.current = restart.index;
+    positionRef.current = restart.positionSec;
+    expect(restart.restart).toBe(true);
+    expect(indexRef.current).toBe(3);
+
+    const moved = stepTransport(
+      {
+        index: indexRef.current,
+        positionSec: positionRef.current,
+        queueLength: 4,
+        repeat: "all",
+      },
+      "previous",
+    );
+    expect(moved.index).toBe(2);
+    expect(moved.moved).toBe(true);
   });
 });
 

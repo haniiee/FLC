@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSegments } from "expo-router";
 import { AppText } from "../components/AppText";
 import { useTheme } from "../theme/theme";
-import { usePlayerOptional } from "./context";
+import { usePlayerOptional, usePlayerProgress } from "./context";
 import { MINI_PLAYER_HEIGHT } from "./types";
 
 const TAB_BAR_BASE = 62;
@@ -28,8 +28,6 @@ export function MiniPlayer() {
   const bottomOffset = onTabs
     ? TAB_BAR_BASE + Math.max(insets.bottom, 0)
     : Math.max(insets.bottom, 8);
-  const progress =
-    player.duration > 0 ? Math.min(1, Math.max(0, player.position / player.duration)) : 0;
 
   return (
     <View
@@ -47,15 +45,7 @@ export function MiniPlayer() {
         ...(cardShadow ?? {}),
       }}
     >
-      <View style={{ height: 3, backgroundColor: colors.border }}>
-        <View
-          style={{
-            height: 3,
-            width: `${progress * 100}%`,
-            backgroundColor: colors.primary,
-          }}
-        />
-      </View>
+      <MiniPlayerProgress color={colors.primary} trackColor={colors.border} />
       <View
         style={{
           minHeight: MINI_PLAYER_HEIGHT - 3,
@@ -118,6 +108,22 @@ export function MiniPlayer() {
           <SkipForward size={22} color={colors.text} />
         </Pressable>
       </View>
+    </View>
+  );
+}
+
+function MiniPlayerProgress({ color, trackColor }: { color: string; trackColor: string }) {
+  const { position, duration } = usePlayerProgress();
+  const progress = duration > 0 ? Math.min(1, Math.max(0, position / duration)) : 0;
+  return (
+    <View style={{ height: 3, backgroundColor: trackColor }}>
+      <View
+        style={{
+          height: 3,
+          width: `${progress * 100}%`,
+          backgroundColor: color,
+        }}
+      />
     </View>
   );
 }

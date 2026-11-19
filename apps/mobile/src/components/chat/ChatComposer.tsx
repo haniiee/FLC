@@ -40,9 +40,11 @@ export function ChatComposer({
     onBeforeRecord: () => voiceRef.current?.pause(),
   });
   const showMic = !hasText || hold.uiRecording;
+  const { pulse } = hold;
+  const recordingOpacity = hold.uiRecording ? 1 : 0;
   const dotStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: hold.pulse.value }],
-    opacity: hold.uiRecording ? 1 : 0,
+    transform: [{ scale: pulse.value }],
+    opacity: recordingOpacity,
   }));
 
   return (

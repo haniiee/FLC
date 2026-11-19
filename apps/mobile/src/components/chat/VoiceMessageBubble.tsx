@@ -7,7 +7,7 @@ import { copy } from "../../lib/copy";
 import { formatRecTimer } from "../../lib/record-logic";
 import { useTheme } from "../../theme/theme";
 import { AppText } from "../AppText";
-import { useChatVoice } from "./ChatVoiceProvider";
+import { useChatVoice, useChatVoiceProgress } from "./ChatVoiceProvider";
 
 type VoiceMessageBubbleProps = {
   message: ClientChatMessage;
@@ -17,16 +17,9 @@ type VoiceMessageBubbleProps = {
 export function VoiceMessageBubble({ message, mine }: VoiceMessageBubbleProps) {
   const { colors } = useTheme();
   const voice = useChatVoice();
-  const [barWidth, setBarWidth] = useState(0);
   const phase = voiceBubblePhase(message);
   const active = voice.activeId === message.id;
   const playing = active && voice.playing;
-  const clock = voicePlaybackClock({
-    active,
-    currentTimeSec: voice.currentTime,
-    durationSec: voice.duration,
-    durationMs: message.durationMs,
-  });
   const ink = mine ? colors.onPrimary : colors.text;
   const muted = mine ? colors.onPrimary : colors.textMuted;
   const track = mine ? "rgba(255,255,255,0.35)" : colors.border;
@@ -66,13 +59,108 @@ export function VoiceMessageBubble({ message, mine }: VoiceMessageBubbleProps) {
     );
   }
 
+  return active ? (
+    <ActiveVoiceBody
+      message={message}
+      playing={playing}
+      buttonColor={mine ? colors.onPrimary : colors.primary}
+      iconColor={mine ? colors.primary : colors.onPrimary}
+      track={track}
+      fill={fill}
+      muted={muted}
+      onToggle={() => voice.toggle(message.id)}
+      onSeek={(ratio) => voice.seek(message.id, ratio)}
+    />
+  ) : (
+    <VoiceBody
+      playing={false}
+      clock={voicePlaybackClock({
+        active: false,
+        currentTimeSec: 0,
+        durationSec: 0,
+        durationMs: message.durationMs,
+      })}
+      buttonColor={mine ? colors.onPrimary : colors.primary}
+      iconColor={mine ? colors.primary : colors.onPrimary}
+      track={track}
+      fill={fill}
+      muted={muted}
+      onToggle={() => voice.toggle(message.id)}
+    />
+  );
+}
+
+function ActiveVoiceBody({
+  message,
+  playing,
+  buttonColor,
+  iconColor,
+  track,
+  fill,
+  muted,
+  onToggle,
+  onSeek,
+}: {
+  message: ClientChatMessage;
+  playing: boolean;
+  buttonColor: string;
+  iconColor: string;
+  track: string;
+  fill: string;
+  muted: string;
+  onToggle: () => void;
+  onSeek: (ratio: number) => void;
+}) {
+  const progress = useChatVoiceProgress();
+  const clock = voicePlaybackClock({
+    active: true,
+    currentTimeSec: progress.currentTime,
+    durationSec: progress.duration,
+    durationMs: message.durationMs,
+  });
+  return (
+    <VoiceBody
+      playing={playing}
+      clock={clock}
+      buttonColor={buttonColor}
+      iconColor={iconColor}
+      track={track}
+      fill={fill}
+      muted={muted}
+      onToggle={onToggle}
+      onSeek={onSeek}
+    />
+  );
+}
+
+function VoiceBody({
+  playing,
+  clock,
+  buttonColor,
+  iconColor,
+  track,
+  fill,
+  muted,
+  onToggle,
+  onSeek,
+}: {
+  playing: boolean;
+  clock: ReturnType<typeof voicePlaybackClock>;
+  buttonColor: string;
+  iconColor: string;
+  track: string;
+  fill: string;
+  muted: string;
+  onToggle: () => void;
+  onSeek?: (ratio: number) => void;
+}) {
   return (
     <View style={{ minWidth: 200, gap: 6 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={playing ? copy.chats.pauseVoice : copy.chats.playVoice}
-          onPress={() => voice.toggle(message.id)}
+          onPress={onToggle}
           hitSlop={6}
           style={{
             width: 36,
@@ -80,50 +168,77 @@ export function VoiceMessageBubble({ message, mine }: VoiceMessageBubbleProps) {
             borderRadius: 18,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: mine ? colors.onPrimary : colors.primary,
+            backgroundColor: buttonColor,
           }}
         >
-          {playing ? (
-            <Pause size={16} color={mine ? colors.primary : colors.onPrimary} />
-          ) : (
-            <Play size={16} color={mine ? colors.primary : colors.onPrimary} />
-          )}
+          {playing ? <Pause size={16} color={iconColor} /> : <Play size={16} color={iconColor} />}
         </Pressable>
-        <Pressable
-          accessibilityRole="adjustable"
-          accessibilityLabel={clock.label}
-          onLayout={(event) => setBarWidth(event.nativeEvent.layout.width)}
-          onPress={(event) => {
-            if (!active || barWidth <= 0) {
-              voice.toggle(message.id);
-              return;
-            }
-            voice.seek(message.id, event.nativeEvent.locationX / barWidth);
-          }}
-          style={{ flex: 1, height: 28, justifyContent: "center" }}
-        >
-          <View
-            style={{
-              height: 4,
-              borderRadius: 2,
-              backgroundColor: track,
-              overflow: "hidden",
-            }}
-          >
-            <View
-              style={{
-                width: `${Math.round(clock.ratio * 100)}%`,
-                height: "100%",
-                borderRadius: 2,
-                backgroundColor: fill,
-              }}
-            />
-          </View>
-        </Pressable>
+        <VoiceMeterBar
+          label={clock.label}
+          ratio={clock.ratio}
+          track={track}
+          fill={fill}
+          onToggle={onToggle}
+          onSeek={onSeek}
+        />
       </View>
       <AppText key={clock.label} variant="caption" style={{ color: muted }}>
         {clock.label}
       </AppText>
     </View>
+  );
+}
+
+function VoiceMeterBar({
+  label,
+  ratio,
+  track,
+  fill,
+  onToggle,
+  onSeek,
+}: {
+  label: string;
+  ratio: number;
+  track: string;
+  fill: string;
+  onToggle: () => void;
+  onSeek?: (ratio: number) => void;
+}) {
+  const [barWidth, setBarWidth] = useState(0);
+  return (
+    <Pressable
+      accessibilityRole="adjustable"
+      accessibilityLabel={label}
+      onLayout={(event) => {
+        const width = event.nativeEvent.layout.width;
+        setBarWidth((prev) => (prev === width ? prev : width));
+      }}
+      onPress={(event) => {
+        if (!onSeek || barWidth <= 0) {
+          onToggle();
+          return;
+        }
+        onSeek(event.nativeEvent.locationX / barWidth);
+      }}
+      style={{ flex: 1, height: 28, justifyContent: "center" }}
+    >
+      <View
+        style={{
+          height: 4,
+          borderRadius: 2,
+          backgroundColor: track,
+          overflow: "hidden",
+        }}
+      >
+        <View
+          style={{
+            width: `${Math.round(ratio * 100)}%`,
+            height: "100%",
+            borderRadius: 2,
+            backgroundColor: fill,
+          }}
+        />
+      </View>
+    </Pressable>
   );
 }

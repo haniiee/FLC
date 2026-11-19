@@ -44,6 +44,105 @@ export function cycleSpeed(rate: number): PlaybackRate {
   return PLAYBACK_RATES[(index + 1) % PLAYBACK_RATES.length]!;
 }
 
+/** Saved rates that are no longer in the list fall back to 1×. */
+export function normalizePlaybackRate(value: number): PlaybackRate {
+  if ((PLAYBACK_RATES as readonly number[]).includes(value)) return value as PlaybackRate;
+  return 1;
+}
+
+export const DEFAULT_REPEAT_MODE: RepeatMode = "all";
+
+/** Missing or unknown storage falls back to repeat-all. */
+export function normalizeRepeatMode(raw: string | null | undefined): RepeatMode {
+  if (raw === "off" || raw === "all" || raw === "one") return raw;
+  return DEFAULT_REPEAT_MODE;
+}
+
+/**
+ * Skip target in seconds. Never before 0, and never into the last half-second
+ * so a forward skip cannot trip end-of-track.
+ */
+export function clampSkipPosition(position: number, deltaSec: number, duration: number): number {
+  const pos = Number.isFinite(position) ? position : 0;
+  const delta = Number.isFinite(deltaSec) ? deltaSec : 0;
+  const next = pos + delta;
+  const max = Number.isFinite(duration) && duration > 0.5 ? duration - 0.5 : 0;
+  return Math.min(Math.max(0, next), Math.max(0, max));
+}
+
+export type TransportCursor = {
+  index: number;
+  positionSec: number;
+  queueLength: number;
+  repeat: RepeatMode;
+  /** True when this step changes the track. */
+  moved: boolean;
+  /** True when this step stays on the track and seeks to 0. */
+  restart: boolean;
+};
+
+/**
+ * One previous/next step. `index` is the caller's ref, so a burst of taps
+ * does not reuse a stale playlist index. A restart writes position 0 so the
+ * next tap moves tracks instead of restarting again.
+ */
+export function stepTransport(
+  cursor: Pick<TransportCursor, "index" | "positionSec" | "queueLength" | "repeat">,
+  direction: "previous" | "next",
+): TransportCursor {
+  const base = {
+    index: cursor.index,
+    positionSec: cursor.positionSec,
+    queueLength: cursor.queueLength,
+    repeat: cursor.repeat,
+  };
+  if (cursor.queueLength <= 0) return { ...base, moved: false, restart: false };
+
+  if (direction === "previous") {
+    const action = previousAction({
+      positionSec: cursor.positionSec,
+      index: cursor.index,
+      queueLength: cursor.queueLength,
+      repeat: cursor.repeat,
+    });
+    if (action === "restart") return { ...base, positionSec: 0, moved: false, restart: true };
+    if (action === "wrap-to-last") {
+      return {
+        ...base,
+        index: cursor.queueLength - 1,
+        positionSec: 0,
+        moved: true,
+        restart: false,
+      };
+    }
+    return { ...base, index: cursor.index - 1, positionSec: 0, moved: true, restart: false };
+  }
+
+  if (cursor.index < cursor.queueLength - 1) {
+    return { ...base, index: cursor.index + 1, positionSec: 0, moved: true, restart: false };
+  }
+  if (cursor.repeat === "all") {
+    const same = cursor.index === 0;
+    return { ...base, index: 0, positionSec: 0, moved: !same, restart: same };
+  }
+  return { ...base, moved: false, restart: false };
+}
+
+export type PreviousAction = "restart" | "previous" | "wrap-to-last";
+
+/** Past 3s restarts the track. The first track wraps to the end only when repeat is all. */
+export function previousAction(input: {
+  positionSec: number;
+  index: number;
+  queueLength: number;
+  repeat: RepeatMode;
+}): PreviousAction {
+  if (input.positionSec > 3) return "restart";
+  if (input.index > 0) return "previous";
+  if (input.repeat === "all" && input.queueLength > 1) return "wrap-to-last";
+  return "restart";
+}
+
 /**
  * Resume when saved position is past 5s and at least 5s remain before the end.
  * Durations/positions are in seconds.

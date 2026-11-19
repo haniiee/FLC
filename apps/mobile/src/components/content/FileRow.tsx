@@ -1,6 +1,6 @@
 import type { FileDto } from "@app/shared-types";
 import { FileAudio2, FileImage, FileText, FileType, Film, Pause, Play } from "lucide-react-native";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, View } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import { getApiClient } from "../../lib/api";
@@ -144,7 +144,12 @@ type FileRowProps = {
   playContext?: PlayAudioContext;
 };
 
-export function FileRow({ file, canManage, onChanged, playContext }: FileRowProps) {
+export const FileRow = memo(function FileRow({
+  file,
+  canManage,
+  onChanged,
+  playContext,
+}: FileRowProps) {
   const { colors, spacing } = useTheme();
   const player = usePlayerOptional();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -350,4 +355,4 @@ export function FileRow({ file, canManage, onChanged, playContext }: FileRowProp
       />
     </>
   );
-}
+});

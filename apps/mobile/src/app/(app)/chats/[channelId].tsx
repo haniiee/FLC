@@ -3,10 +3,11 @@ import type { ChatChannelKind } from "@app/shared-types";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import { ArrowLeft, MessagesSquare } from "lucide-react-native";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  type ListRenderItem,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -336,12 +337,75 @@ export default function ChannelScreen() {
     setMenu(message);
   }
 
-  function onScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+  const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const away = event.nativeEvent.contentOffset.y > 80;
     awayFromLatest.current = away;
     if (away) canPaginate.current = true;
-    if (!away) setHasNew(false);
-  }
+    if (!away) setHasNew((current) => (current ? false : current));
+  }, []);
+
+  const openMenuRef = useRef(openMenu);
+  openMenuRef.current = openMenu;
+  const onRetryRef = useRef(onRetry);
+  onRetryRef.current = onRetry;
+  const userId = user?.id;
+
+  const keyExtractor = useCallback((row: ChatRow) => row.key, []);
+
+  const onEndReached = useCallback(() => {
+    if (!canPaginate.current) return;
+    if (messagesQuery.hasNextPage && !messagesQuery.isFetchingNextPage) {
+      void messagesQuery.fetchNextPage();
+    }
+  }, [messagesQuery.hasNextPage, messagesQuery.isFetchingNextPage, messagesQuery.fetchNextPage]);
+
+  const maintainPosition = useMemo(
+    () => ({ minIndexForVisible: 1, autoscrollToTopThreshold: 48 }),
+    [],
+  );
+
+  const listFooter = useMemo(
+    () =>
+      messagesQuery.isFetchingNextPage ? (
+        <ActivityIndicator color={colors.primary} style={{ marginVertical: 12 }} />
+      ) : undefined,
+    [colors.primary, messagesQuery.isFetchingNextPage],
+  );
+
+  const renderItem = useCallback<ListRenderItem<ChatRow>>(
+    ({ item }) => {
+      if (item.type === "day") {
+        return (
+          <View style={{ alignItems: "center", marginTop: 16, marginBottom: 4 }}>
+            <View
+              style={{
+                backgroundColor: colors.surfaceMuted,
+                borderRadius: 999,
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+              }}
+            >
+              <AppText variant="caption" color="textMuted">
+                {item.label}
+              </AppText>
+            </View>
+          </View>
+        );
+      }
+      return (
+        <MessageBubble
+          message={item.message}
+          mine={item.message.sender.id === userId}
+          showSender={item.showSender}
+          showTime={item.showTime}
+          grouped={item.grouped}
+          onLongPress={() => openMenuRef.current(item.message)}
+          onRetry={() => onRetryRef.current(item.message)}
+        />
+      );
+    },
+    [colors.surfaceMuted, userId],
+  );
 
   const menuCanCopy = Boolean(menu && menu.type === "text" && menu.text);
   const menuCanDelete = Boolean(
@@ -422,58 +486,17 @@ export default function ChannelScreen() {
               <FlatList
                 ref={listRef}
                 data={rows}
+                extraData={userId}
                 inverted
-                keyExtractor={(row) => row.key}
+                keyExtractor={keyExtractor}
                 keyboardShouldPersistTaps="handled"
                 onScroll={onScroll}
                 scrollEventThrottle={16}
                 onEndReachedThreshold={0.4}
-                onEndReached={() => {
-                  if (!canPaginate.current) return;
-                  if (messagesQuery.hasNextPage && !messagesQuery.isFetchingNextPage) {
-                    void messagesQuery.fetchNextPage();
-                  }
-                }}
-                maintainVisibleContentPosition={{
-                  minIndexForVisible: 1,
-                  autoscrollToTopThreshold: 48,
-                }}
-                ListFooterComponent={
-                  messagesQuery.isFetchingNextPage ? (
-                    <ActivityIndicator color={colors.primary} style={{ marginVertical: 12 }} />
-                  ) : undefined
-                }
-                renderItem={({ item }) => {
-                  if (item.type === "day") {
-                    return (
-                      <View style={{ alignItems: "center", marginTop: 16, marginBottom: 4 }}>
-                        <View
-                          style={{
-                            backgroundColor: colors.surfaceMuted,
-                            borderRadius: 999,
-                            paddingHorizontal: 10,
-                            paddingVertical: 4,
-                          }}
-                        >
-                          <AppText variant="caption" color="textMuted">
-                            {item.label}
-                          </AppText>
-                        </View>
-                      </View>
-                    );
-                  }
-                  return (
-                    <MessageBubble
-                      message={item.message}
-                      mine={item.message.sender.id === user?.id}
-                      showSender={item.showSender}
-                      showTime={item.showTime}
-                      grouped={item.grouped}
-                      onLongPress={() => openMenu(item.message)}
-                      onRetry={() => onRetry(item.message)}
-                    />
-                  );
-                }}
+                onEndReached={onEndReached}
+                maintainVisibleContentPosition={maintainPosition}
+                ListFooterComponent={listFooter}
+                renderItem={renderItem}
               />
               {hasNew ? (
                 <Pressable

@@ -19,9 +19,10 @@ export function RecordButton({ onCaptured, disabled }: RecordButtonProps) {
   const { colors, spacing, isDark, cardShadow } = useTheme();
   const insets = useSafeAreaInsets();
   const hold = useHoldToRecord({ onCaptured, disabled });
+  const { dragX, pulse, chevronX } = hold;
 
   const hintShift = useAnimatedStyle(() => {
-    const dx = Math.min(0, Math.max(-CANCEL_SLIDE_PX, hold.dragX.value));
+    const dx = Math.min(0, Math.max(-CANCEL_SLIDE_PX, dragX.value));
     return {
       transform: [{ translateX: dx }],
       opacity: interpolate(dx, [-CANCEL_SLIDE_PX, 0], [0.7, 1], "clamp"),
@@ -29,12 +30,12 @@ export function RecordButton({ onCaptured, disabled }: RecordButtonProps) {
   });
 
   const pulseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: hold.pulse.value }],
-    opacity: interpolate(hold.pulse.value, [1, 1.35], [1, 0.35]),
+    transform: [{ scale: pulse.value }],
+    opacity: interpolate(pulse.value, [1, 1.35], [1, 0.35]),
   }));
 
   const chevronStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: hold.chevronX.value }],
+    transform: [{ translateX: chevronX.value }],
   }));
 
   const timerLabel = formatRecTimer(hold.uiRecording ? hold.elapsedMs : 0);

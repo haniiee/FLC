@@ -1,21 +1,19 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { PLAYBACK_RATES, type PlaybackRate, type RepeatMode } from "./types";
+import { normalizePlaybackRate, normalizeRepeatMode, DEFAULT_REPEAT_MODE } from "./logic";
+import type { PlaybackRate, RepeatMode } from "./types";
 
 const RATE_KEY = "flc:playbackRate";
-const REPEAT_KEY = "flc:repeatMode";
+/** v2 ignores an older "off" value saved before repeat-all became the default. */
+const REPEAT_KEY = "flc.player.repeat.v2";
 const resumeKey = (fileId: string) => `flc:resume:${fileId}`;
 
 export async function loadPlaybackRate(): Promise<PlaybackRate> {
   try {
     const raw = await AsyncStorage.getItem(RATE_KEY);
-    const value = raw ? Number(raw) : NaN;
-    if (PLAYBACK_RATES.includes(value as PlaybackRate)) {
-      return value as PlaybackRate;
-    }
+    return normalizePlaybackRate(raw ? Number(raw) : NaN);
   } catch {
-    // ignore
+    return 1;
   }
-  return 1;
 }
 
 export async function savePlaybackRate(rate: number): Promise<void> {
@@ -25,11 +23,10 @@ export async function savePlaybackRate(rate: number): Promise<void> {
 export async function loadRepeatMode(): Promise<RepeatMode> {
   try {
     const raw = await AsyncStorage.getItem(REPEAT_KEY);
-    if (raw === "all" || raw === "one" || raw === "off") return raw;
+    return normalizeRepeatMode(raw);
   } catch {
-    // ignore
+    return DEFAULT_REPEAT_MODE;
   }
-  return "off";
 }
 
 export async function saveRepeatMode(mode: RepeatMode): Promise<void> {

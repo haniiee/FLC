@@ -1,13 +1,17 @@
 import {
+  Check,
   ChevronDown,
   Pause,
   Play,
   Repeat,
   Repeat1,
+  RotateCcw,
+  RotateCw,
   SkipBack,
   SkipForward,
 } from "lucide-react-native";
-import { Pressable, ScrollView, View } from "react-native";
+import { useState } from "react";
+import { Modal, Pressable, ScrollView, View } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppText } from "../../components/AppText";
@@ -16,7 +20,8 @@ import { Screen } from "../../components/Screen";
 import { SeekBar } from "../../components/SeekBar";
 import { copy } from "../../lib/copy";
 import { formatClock, upNextItems } from "../../player/logic";
-import { usePlayer } from "../../player/context";
+import { usePlayer, usePlayerProgress } from "../../player/context";
+import { PLAYBACK_RATES } from "../../player/types";
 import { useTheme } from "../../theme/theme";
 
 function RepeatIcon({ mode }: { mode: "off" | "all" | "one" }) {
@@ -57,6 +62,7 @@ export default function FullPlayerScreen() {
   const { colors, spacing, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const current = player.current;
+  const [speedOpen, setSpeedOpen] = useState(false);
 
   const upNext = upNextItems(player.queue, player.index, player.repeat);
   const emptyLabel = upNextLabelText(upNext.label);
@@ -141,32 +147,14 @@ export default function FullPlayerScreen() {
             </AppText>
           </View>
 
-          <View style={{ gap: spacing[2] }}>
-            <View accessibilityLabel="Seek">
-              <SeekBar
-                value={Math.min(player.position, Math.max(player.duration, 1))}
-                maximumValue={Math.max(player.duration, 1)}
-                onSlidingComplete={(value) => {
-                  void player.seekTo(value);
-                }}
-              />
-            </View>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <AppText variant="caption" color="textMuted" accessibilityLabel="Current time">
-                {formatClock(player.position)}
-              </AppText>
-              <AppText variant="caption" color="textMuted" accessibilityLabel="Duration">
-                {formatClock(player.duration)}
-              </AppText>
-            </View>
-          </View>
+          <PlayerSeekRow seekTo={player.seekTo} />
 
           <View
             style={{
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "center",
-              gap: spacing[5],
+              gap: spacing[3],
             }}
           >
             <Pressable
@@ -174,8 +162,18 @@ export default function FullPlayerScreen() {
               accessibilityLabel="Previous"
               hitSlop={8}
               onPress={player.previous}
+              style={transportHit}
             >
-              <SkipBack size={28} color={colors.text} />
+              <SkipBack size={26} color={colors.text} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back 10 seconds"
+              hitSlop={8}
+              onPress={() => player.skipBy(-10)}
+              style={transportHit}
+            >
+              <RotateCcw size={26} color={colors.text} />
             </Pressable>
             <Pressable
               accessibilityRole="button"
@@ -203,11 +201,21 @@ export default function FullPlayerScreen() {
             </Pressable>
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="Forward 10 seconds"
+              hitSlop={8}
+              onPress={() => player.skipBy(10)}
+              style={transportHit}
+            >
+              <RotateCw size={26} color={colors.text} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
               accessibilityLabel="Next"
               hitSlop={8}
               onPress={player.next}
+              style={transportHit}
             >
-              <SkipForward size={28} color={colors.text} />
+              <SkipForward size={26} color={colors.text} />
             </Pressable>
           </View>
 
@@ -235,7 +243,7 @@ export default function FullPlayerScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Speed ${player.rate}x`}
-              onPress={player.cycleSpeed}
+              onPress={() => setSpeedOpen(true)}
               style={{
                 minWidth: 64,
                 height: 40,
@@ -317,6 +325,105 @@ export default function FullPlayerScreen() {
           </View>
         </ScrollView>
       )}
+      <Modal
+        visible={speedOpen}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setSpeedOpen(false)}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close speed"
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" }}
+          onPress={() => setSpeedOpen(false)}
+        >
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={{
+              backgroundColor: colors.bg,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              paddingHorizontal: 16,
+              paddingTop: 20,
+              paddingBottom: Math.max(insets.bottom, 16),
+              gap: 4,
+            }}
+          >
+            <AppText variant="h2" style={{ marginBottom: 8 }}>
+              Speed
+            </AppText>
+            {PLAYBACK_RATES.map((rate) => {
+              const selected = Math.abs(player.rate - rate) < 0.001;
+              return (
+                <Pressable
+                  key={rate}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Speed ${rate}x`}
+                  accessibilityState={{ selected }}
+                  onPress={() => {
+                    player.setRate(rate);
+                    setSpeedOpen(false);
+                  }}
+                  style={{
+                    minHeight: 44,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingHorizontal: 8,
+                    borderRadius: 12,
+                    backgroundColor: selected ? colors.primarySoft : "transparent",
+                  }}
+                >
+                  <AppText variant="body" color={selected ? "primary" : "text"}>
+                    {`${rate}×`}
+                  </AppText>
+                  {selected ? <Check size={18} color={colors.primary} /> : null}
+                </Pressable>
+              );
+            })}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Screen>
   );
 }
+
+function PlayerSeekRow({ seekTo }: { seekTo: (seconds: number) => Promise<void> }) {
+  const { position, duration } = usePlayerProgress();
+  const { spacing } = useTheme();
+  const [scrub, setScrub] = useState<number | null>(null);
+  const shownTime = scrub ?? position;
+  const max = Math.max(duration, 1);
+
+  return (
+    <View style={{ gap: spacing[2] }}>
+      <View accessibilityLabel="Seek">
+        <SeekBar
+          value={scrub ?? Math.min(position, max)}
+          maximumValue={max}
+          onSlidingStart={setScrub}
+          onValueChange={setScrub}
+          onSlidingComplete={(value) => {
+            setScrub(value);
+            void seekTo(value).finally(() => setScrub(null));
+          }}
+        />
+      </View>
+      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+        <AppText variant="caption" color="textMuted" accessibilityLabel="Current time">
+          {formatClock(shownTime)}
+        </AppText>
+        <AppText variant="caption" color="textMuted" accessibilityLabel="Duration">
+          {formatClock(duration)}
+        </AppText>
+      </View>
+    </View>
+  );
+}
+
+const transportHit = {
+  width: 44,
+  height: 44,
+  alignItems: "center" as const,
+  justifyContent: "center" as const,
+};
