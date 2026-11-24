@@ -2,13 +2,16 @@
 
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { landingCopy } from "../../lib/landing-copy";
 
 gsap.registerPlugin(ScrollTrigger);
 
 type VariantId = "desktop" | "mobile";
 
 export type FramesManifest = {
+  source?: string;
   variants: Record<
     VariantId,
     {
@@ -84,6 +87,7 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 }
 
 const SCRUB_RESUME_MS = 700;
+const DEFAULT_SOUNDTRACK = "/video/aida.mp4";
 
 export function FrameSequence({
   children,
@@ -106,6 +110,11 @@ export function FrameSequence({
   const manifestRef = useRef<FramesManifest | null>(null);
   const scrubUntilRef = useRef(0);
   const stRef = useRef<ScrollTrigger | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioStateRef = useRef<"idle" | "starting" | "blocked" | "playing">("idle");
+  const scrollDrivenRef = useRef(false);
+  const mutedRef = useRef(false);
+  const [muted, setMuted] = useState(false);
   const [reduced, setReduced] = useState(false);
   const [ready, setReady] = useState(false);
   const [lastFrameSrc, setLastFrameSrc] = useState<string | null>(null);
@@ -238,6 +247,13 @@ export function FrameSequence({
       if (cancelled) return;
       manifestRef.current = manifest;
 
+      const soundtrack = audioRef.current;
+      if (soundtrack) {
+        soundtrack.src = manifest.source || DEFAULT_SOUNDTRACK;
+        soundtrack.loop = true;
+        soundtrack.muted = mutedRef.current;
+      }
+
       const activeVariant = variantRef.current;
       const meta = manifest.variants[activeVariant];
       const count = meta.frameCount;
@@ -338,6 +354,7 @@ export function FrameSequence({
         const scrubbing = performance.now() < scrubUntilRef.current;
         if (scrubbing || Math.abs(self.getVelocity()) > 8) {
           markScrubbing();
+          scrollDrivenRef.current = true;
           schedulePaintFromProgress(self.progress, true);
         }
       },
@@ -363,7 +380,9 @@ export function FrameSequence({
     };
   }, [fit, markScrubbing, ready, reduced, schedulePaintFromProgress]);
 
-  // Autoplay loop — runs when not scrubbing and pin section is in view
+  // Autoplay loop — runs when not scrubbing and pin section is in view.
+  // The soundtrack is the clock once the browser allows playback; frames keep
+  // advancing on their own until then.
   useEffect(() => {
     if (reduced || !ready) return;
     const manifest = manifestRef.current;
@@ -373,26 +392,90 @@ export function FrameSequence({
     const durationSec = Math.max(0.1, (meta.frameCount - 1) / meta.fps);
     let raf = 0;
     let last = performance.now();
+    let playGen = 0;
+
+    const seekAudio = (progress: number) => {
+      const audio = audioRef.current;
+      if (!audio || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
+      const target = Math.min(Math.max(0, progress) * audio.duration, Math.max(0, audio.duration - 0.05));
+      if (Math.abs(audio.currentTime - target) > 0.12) {
+        audio.currentTime = target;
+      }
+    };
+
+    const requestPlay = (progress: number) => {
+      const audio = audioRef.current;
+      if (!audio || audioStateRef.current === "starting" || audioStateRef.current === "blocked") return;
+      if (!audio.paused && audioStateRef.current === "playing") return;
+      const gen = ++playGen;
+      audioStateRef.current = "starting";
+      seekAudio(progress);
+      void audio.play().then(
+        () => {
+          if (gen === playGen) audioStateRef.current = "playing";
+        },
+        (error: unknown) => {
+          if (gen !== playGen) return;
+          const name = error instanceof DOMException ? error.name : "";
+          // Pause during a scroll scrub aborts play(); the gesture itself was allowed.
+          audioStateRef.current = name === "AbortError" ? "playing" : "blocked";
+        },
+      );
+    };
+
+    const unlock = () => {
+      const audio = audioRef.current;
+      if (!audio || (!audio.paused && audioStateRef.current === "playing")) return;
+      audioStateRef.current = "idle";
+      requestPlay(progressRef.current);
+    };
+
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
 
     const tick = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
 
-      const scrubbing = now < scrubUntilRef.current;
+      const scrubbing = now < scrubUntilRef.current && scrollDrivenRef.current;
       const st = stRef.current;
       const pinActive = st?.isActive ?? true;
+      const audio = audioRef.current;
+      const audioClock =
+        audio &&
+        !audio.paused &&
+        Number.isFinite(audio.duration) &&
+        audio.duration > 0;
 
-      if (!scrubbing && pinActive) {
+      if (!pinActive) {
+        if (audio && !audio.paused) audio.pause();
+      } else if (scrubbing) {
+        if (audio && !audio.paused) audio.pause();
+      } else if (audioClock && audio) {
+        scrollDrivenRef.current = false;
+        schedulePaintFromProgress(audio.currentTime / audio.duration);
+      } else {
         let next = progressRef.current + dt / durationSec;
         if (next >= 1) next -= Math.floor(next);
         schedulePaintFromProgress(next);
+        if (audioStateRef.current === "idle" || (audioStateRef.current === "playing" && audio?.paused)) {
+          scrollDrivenRef.current = false;
+          requestPlay(next);
+        }
       }
 
       raf = requestAnimationFrame(tick);
     };
 
+    requestPlay(progressRef.current);
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+      audioRef.current?.pause();
+      audioStateRef.current = "idle";
+    };
   }, [ready, reduced, schedulePaintFromProgress]);
 
   return (
@@ -414,6 +497,25 @@ export function FrameSequence({
           ) : null
         ) : (
           <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full" aria-hidden />
+        )}
+        <audio ref={audioRef} preload="auto" loop hidden muted={muted} />
+        {reduced ? null : (
+          <button
+            type="button"
+            onClick={() => {
+              setMuted((current) => {
+                const next = !current;
+                mutedRef.current = next;
+                if (audioRef.current) audioRef.current.muted = next;
+                return next;
+              });
+            }}
+            aria-pressed={muted}
+            aria-label={muted ? landingCopy.sound.unmute : landingCopy.sound.mute}
+            className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-4 z-40 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-[#070D1F]/45 text-white shadow-card backdrop-blur-md transition hover:bg-[#070D1F]/70 sm:right-8"
+          >
+            {muted ? <VolumeX className="h-5 w-5" aria-hidden /> : <Volume2 className="h-5 w-5" aria-hidden />}
+          </button>
         )}
         {fit === "cover" ? <EdgeFade /> : null}
         {fit === "cover" ? children : null}

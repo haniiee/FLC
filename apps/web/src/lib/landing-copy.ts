@@ -7,6 +7,10 @@ export const landingCopy = {
     signIn: "Sign in",
   },
   scrollHint: "Scroll",
+  sound: {
+    mute: "Mute",
+    unmute: "Unmute",
+  },
   cta: {
     title: "Your class, always with you.",
     features: [
