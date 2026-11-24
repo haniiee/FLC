@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import {
   AuthResponseSchema,
+  ChangePasswordBodySchema,
   LoginBodySchema,
   LogoutBodySchema,
   MeResponseSchema,
@@ -15,6 +16,7 @@ import { users } from "../db/schema";
 import { toUserDto } from "../lib/mappers";
 import { unauthorized } from "../lib/errors";
 import {
+  changePassword,
   loginUser,
   logoutRefreshToken,
   refreshAuthTokens,
@@ -68,6 +70,20 @@ export const authRoutes: FastifyPluginAsync = async (rawApp) => {
     async (request) => {
       await logoutRefreshToken(request.body.refreshToken);
       return { ok: true as const };
+    },
+  );
+
+  app.post(
+    "/auth/change-password",
+    {
+      schema: {
+        body: ChangePasswordBodySchema,
+      },
+    },
+    async (request, reply) => {
+      await app.authenticate(request);
+      await changePassword(request.user.sub, request.body);
+      return reply.code(204).send();
     },
   );
 

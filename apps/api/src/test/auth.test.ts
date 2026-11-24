@@ -104,6 +104,54 @@ describe("auth", () => {
 
     expect(me.statusCode).toBe(200);
     expect(me.json().user.displayName).toBe("Me");
+    expect(me.json().user.mustChangePassword).toBe(false);
+  });
+
+  it("change-password clears mustChangePassword and revokes refresh tokens", async () => {
+    const registered = await register(app, {
+      phone: "09120000004",
+      password: "password1",
+      displayName: "Change",
+    });
+
+    await db
+      .update(schema.users)
+      .set({ mustChangePassword: true })
+      .where(eq(schema.users.id, registered.body.user.id));
+
+    const oldRefresh = registered.body.refreshToken as string;
+
+    const changed = await app.inject({
+      method: "POST",
+      url: "/auth/change-password",
+      headers: authHeader(registered.body.accessToken),
+      payload: {
+        currentPassword: "password1",
+        newPassword: "password2x",
+      },
+    });
+    expect(changed.statusCode).toBe(204);
+
+    const me = await app.inject({
+      method: "GET",
+      url: "/me",
+      headers: authHeader(registered.body.accessToken),
+    });
+    expect(me.statusCode).toBe(200);
+    expect(me.json().user.mustChangePassword).toBe(false);
+
+    const reuse = await app.inject({
+      method: "POST",
+      url: "/auth/refresh",
+      payload: { refreshToken: oldRefresh },
+    });
+    expect(reuse.statusCode).toBe(401);
+
+    const loggedIn = await login(app, {
+      phone: "09120000004",
+      password: "password2x",
+    });
+    expect(loggedIn.status).toBe(200);
   });
 
   it("allows only one concurrent refresh to succeed", async () => {

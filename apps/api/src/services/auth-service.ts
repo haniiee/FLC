@@ -1,5 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
+import type { PlatformRole } from "@app/shared-types";
 import { db } from "../db";
 import { refreshTokens, users, type User } from "../db/schema";
 import {
@@ -8,7 +9,7 @@ import {
   generateRefreshToken,
   hashToken,
 } from "../lib/tokens";
-import { hashPassword, verifyPassword } from "../lib/password";
+import { assertPasswordPolicy, hashPassword, verifyPassword } from "../lib/password";
 import { normalizePhone } from "../lib/phone";
 import { badRequest, conflict, unauthorized } from "../lib/errors";
 import { toUserDto } from "../lib/mappers";
@@ -16,7 +17,7 @@ import type { AuthResponse } from "@app/shared-types";
 
 export type JwtPayload = {
   sub: string;
-  platformRole: "teacher" | "user";
+  platformRole: PlatformRole;
 };
 
 async function issueRefreshToken(userId: string): Promise<string> {
@@ -98,11 +99,40 @@ export async function loginUser(
   return issueAuthTokens(app, user);
 }
 
-async function revokeAllUserRefreshTokens(userId: string): Promise<void> {
+export async function revokeAllUserRefreshTokens(userId: string): Promise<void> {
   await db
     .update(refreshTokens)
     .set({ revokedAt: new Date() })
     .where(and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt)));
+}
+
+export async function changePassword(
+  userId: string,
+  input: { currentPassword: string; newPassword: string },
+): Promise<void> {
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, userId),
+  });
+  if (!user) {
+    throw unauthorized();
+  }
+
+  if (!(await verifyPassword(user.passwordHash, input.currentPassword))) {
+    throw unauthorized("INVALID_CREDENTIALS", "رمز عبور فعلی نادرست است");
+  }
+
+  assertPasswordPolicy(input.newPassword);
+  const passwordHash = await hashPassword(input.newPassword);
+
+  await db
+    .update(users)
+    .set({
+      passwordHash,
+      mustChangePassword: false,
+    })
+    .where(eq(users.id, userId));
+
+  await revokeAllUserRefreshTokens(userId);
 }
 
 export async function refreshAuthTokens(

@@ -87,9 +87,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (meQuery.isPending) return;
     const inAuthGroup = segments[0] === "(auth)";
-    if (!meQuery.data && !inAuthGroup) {
-      router.replace("/login");
-    } else if (meQuery.data && inAuthGroup) {
+    const onChangePassword = inAuthGroup && segments[1] === "change-password";
+
+    if (!meQuery.data) {
+      if (!inAuthGroup) {
+        router.replace("/login");
+      }
+      return;
+    }
+
+    if (meQuery.data.mustChangePassword) {
+      if (!onChangePassword) {
+        router.replace("/change-password");
+      }
+      return;
+    }
+
+    if (inAuthGroup) {
       router.replace("/");
     }
   }, [meQuery.data, meQuery.isPending, segments]);

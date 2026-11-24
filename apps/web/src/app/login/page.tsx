@@ -15,25 +15,29 @@ export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") || "/";
-  const { setSessionFromAuth, isAuthenticated, isLoading } = useAuth();
+  const { user, setSessionFromAuth, isAuthenticated, isLoading } = useAuth();
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      router.replace(next);
+      router.replace(user?.mustChangePassword ? "/change-password" : next);
     }
-  }, [isAuthenticated, isLoading, next, router]);
+  }, [isAuthenticated, isLoading, next, router, user?.mustChangePassword]);
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     setLoading(true);
     try {
-      await getApiClient().login({ phone, password });
+      const auth = await getApiClient().login({ phone, password });
       await setSessionFromAuth();
       toast.success("ورود موفق");
-      router.replace(next);
+      if (auth.user.mustChangePassword) {
+        router.replace("/change-password");
+      } else {
+        router.replace(next);
+      }
     } catch (error) {
       toast.error(apiErrorMessage(error, "ورود ناموفق بود"));
     } finally {

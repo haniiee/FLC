@@ -13,6 +13,7 @@ import { env } from "./env";
 import { AppError } from "./lib/errors";
 import { registerAuthDecorator } from "./plugins/auth";
 import { attachRealtime, closeRealtime } from "./realtime";
+import { adminRoutes } from "./routes/admin";
 import { authRoutes } from "./routes/auth";
 import { chatRoutes } from "./routes/chat";
 import { contentRoutes } from "./routes/content";
@@ -104,6 +105,7 @@ export async function buildApp(options?: { logger?: boolean }): Promise<FastifyI
 
   await app.register(healthRoutes);
   await app.register(authRoutes);
+  await app.register(adminRoutes);
   await app.register(groupRoutes);
   await app.register(inviteRoutes);
   await app.register(contentRoutes);

@@ -2,6 +2,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
   bigint,
+  boolean,
   index,
   integer,
   pgEnum,
@@ -14,7 +15,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-export const platformRoleEnum = pgEnum("platform_role", ["teacher", "user"]);
+export const platformRoleEnum = pgEnum("platform_role", ["teacher", "user", "admin"]);
 export const groupRoleEnum = pgEnum("group_role", ["teacher", "assistant", "student"]);
 export const fileKindEnum = pgEnum("file_kind", ["audio", "pdf", "image", "video", "text"]);
 export const fileStatusEnum = pgEnum("file_status", ["pending", "processing", "ready", "failed"]);
@@ -28,6 +29,10 @@ export const users = pgTable("users", {
   displayName: text("display_name").notNull(),
   passwordHash: text("password_hash").notNull(),
   platformRole: platformRoleEnum("platform_role").notNull().default("user"),
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
+  createdBy: uuid("created_by").references((): AnyPgColumn => users.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -217,12 +222,18 @@ export const bookmarks = pgTable(
   ],
 );
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ one, many }) => ({
   ownedGroups: many(groups),
   memberships: many(groupMembers),
   refreshTokens: many(refreshTokens),
   playlists: many(playlists),
   bookmarks: many(bookmarks),
+  creator: one(users, {
+    fields: [users.createdBy],
+    references: [users.id],
+    relationName: "user_creator",
+  }),
+  createdUsers: many(users, { relationName: "user_creator" }),
 }));
 
 export const groupsRelations = relations(groups, ({ one, many }) => ({

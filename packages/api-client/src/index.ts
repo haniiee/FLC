@@ -1,5 +1,13 @@
 import {
+  AddAdminMemberBodySchema,
+  AddAdminMemberResponseSchema,
+  AdminGroupSchema,
+  AdminGroupsListResponseSchema,
+  AdminMembersListResponseSchema,
+  AdminMemberSchema,
+  AdminUsersListResponseSchema,
   AuthResponseSchema,
+  ChangePasswordBodySchema,
   ChatChannelsResponseSchema,
   ChatMessageSchema,
   ChatMessagesResponseSchema,
@@ -7,6 +15,9 @@ import {
   ChatVoiceUploadBodySchema,
   ChatVoiceUploadResponseSchema,
   CompleteFileBodySchema,
+  CreateAdminGroupBodySchema,
+  CreateAdminUserBodySchema,
+  CreateAdminUserResponseSchema,
   CreateChatTextBodySchema,
   CreateGroupBodySchema,
   CreateInviteBodySchema,
@@ -41,17 +52,30 @@ import {
   PublicInviteSchema,
   RefreshBodySchema,
   RegisterBodySchema,
+  ResetAdminPasswordBodySchema,
+  ResetAdminPasswordResponseSchema,
   SessionDetailSchema,
   SessionSummarySchema,
   SessionsListResponseSchema,
+  SetAdminGroupTeacherBodySchema,
   TopicDetailSchema,
   TopicSummarySchema,
+  UpdateAdminGroupBodySchema,
+  UpdateAdminMemberBodySchema,
   UpdateGroupBodySchema,
   UpdateMemberRoleBodySchema,
   UpdateTitleBodySchema,
   UploadUrlBodySchema,
   UploadUrlResponseSchema,
+  type AddAdminMemberBody,
+  type AddAdminMemberResponse,
+  type AdminGroup,
+  type AdminGroupsListResponse,
+  type AdminMembersListResponse,
+  type AdminMember,
+  type AdminUsersListResponse,
   type AuthResponse,
+  type ChangePasswordBody,
   type ChatChannelsResponse,
   type ChatMessage,
   type ChatMessagesResponse,
@@ -59,6 +83,9 @@ import {
   type ChatVoiceUploadBody,
   type ChatVoiceUploadResponse,
   type CompleteFileBody,
+  type CreateAdminGroupBody,
+  type CreateAdminUserBody,
+  type CreateAdminUserResponse,
   type CreateChatTextBody,
   type CreateGroupBody,
   type CreateInviteBody,
@@ -92,11 +119,16 @@ import {
   type UpdatePlaylistBody,
   type PublicInvite,
   type RegisterBody,
+  type ResetAdminPasswordBody,
+  type ResetAdminPasswordResponse,
   type SessionDetail,
   type SessionSummary,
   type SessionsListResponse,
+  type SetAdminGroupTeacherBody,
   type TopicDetail,
   type TopicSummary,
+  type UpdateAdminGroupBody,
+  type UpdateAdminMemberBody,
   type UpdateGroupBody,
   type UpdateMemberRoleBody,
   type UpdateTitleBody,
@@ -151,7 +183,34 @@ export type ApiClient = {
   login: (body: LoginBody) => Promise<AuthResponse>;
   refresh: (refreshToken?: string) => Promise<AuthResponse>;
   logout: (refreshToken?: string) => Promise<OkResponse>;
+  changePassword: (body: ChangePasswordBody) => Promise<void>;
   me: () => Promise<MeResponse>;
+  admin: {
+    users: {
+      list: (query?: { q?: string; cursor?: string }) => Promise<AdminUsersListResponse>;
+      create: (body: CreateAdminUserBody) => Promise<CreateAdminUserResponse>;
+      resetPassword: (
+        id: string,
+        body?: ResetAdminPasswordBody,
+      ) => Promise<ResetAdminPasswordResponse>;
+    };
+    groups: {
+      list: (query?: { q?: string }) => Promise<AdminGroupsListResponse>;
+      create: (body: CreateAdminGroupBody) => Promise<AdminGroup>;
+      update: (id: string, body: UpdateAdminGroupBody) => Promise<AdminGroup>;
+      setTeacher: (id: string, body: SetAdminGroupTeacherBody) => Promise<AdminGroup>;
+    };
+    members: {
+      list: (groupId: string) => Promise<AdminMembersListResponse>;
+      add: (groupId: string, body: AddAdminMemberBody) => Promise<AddAdminMemberResponse>;
+      update: (
+        groupId: string,
+        userId: string,
+        body: UpdateAdminMemberBody,
+      ) => Promise<AdminMember>;
+      remove: (groupId: string, userId: string) => Promise<void>;
+    };
+  };
   createGroup: (body: CreateGroupBody) => Promise<GroupSummary>;
   listGroups: () => Promise<GroupsListResponse>;
   getGroup: (id: string) => Promise<GroupDetail>;
@@ -446,6 +505,82 @@ export function createApiClient(baseUrl: string, options: ApiClientOptions = {})
     },
 
     me: () => request("/me", MeResponseSchema),
+
+    changePassword: async (body) => {
+      ChangePasswordBodySchema.parse(body);
+      await request<void>("/auth/change-password", z.void(), { method: "POST", body });
+    },
+
+    admin: {
+      users: {
+        list: (query = {}) => {
+          const params = new URLSearchParams();
+          if (query.q) params.set("q", query.q);
+          if (query.cursor) params.set("cursor", query.cursor);
+          const qs = params.toString();
+          return request(`/admin/users${qs ? `?${qs}` : ""}`, AdminUsersListResponseSchema);
+        },
+        create: (body) => {
+          CreateAdminUserBodySchema.parse(body);
+          return request("/admin/users", CreateAdminUserResponseSchema, {
+            method: "POST",
+            body,
+          });
+        },
+        resetPassword: (id, body = {}) => {
+          ResetAdminPasswordBodySchema.parse(body);
+          return request(`/admin/users/${id}/reset-password`, ResetAdminPasswordResponseSchema, {
+            method: "POST",
+            body,
+          });
+        },
+      },
+      groups: {
+        list: (query = {}) => {
+          const params = new URLSearchParams();
+          if (query.q) params.set("q", query.q);
+          const qs = params.toString();
+          return request(`/admin/groups${qs ? `?${qs}` : ""}`, AdminGroupsListResponseSchema);
+        },
+        create: (body) => {
+          CreateAdminGroupBodySchema.parse(body);
+          return request("/admin/groups", AdminGroupSchema, { method: "POST", body });
+        },
+        update: (id, body) => {
+          UpdateAdminGroupBodySchema.parse(body);
+          return request(`/admin/groups/${id}`, AdminGroupSchema, { method: "PATCH", body });
+        },
+        setTeacher: (id, body) => {
+          SetAdminGroupTeacherBodySchema.parse(body);
+          return request(`/admin/groups/${id}/teacher`, AdminGroupSchema, {
+            method: "PUT",
+            body,
+          });
+        },
+      },
+      members: {
+        list: (groupId) =>
+          request(`/admin/groups/${groupId}/members`, AdminMembersListResponseSchema),
+        add: (groupId, body) => {
+          AddAdminMemberBodySchema.parse(body);
+          return request(`/admin/groups/${groupId}/members`, AddAdminMemberResponseSchema, {
+            method: "POST",
+            body,
+          });
+        },
+        update: (groupId, userId, body) => {
+          UpdateAdminMemberBodySchema.parse(body);
+          return request(`/admin/groups/${groupId}/members/${userId}`, AdminMemberSchema, {
+            method: "PATCH",
+            body,
+          });
+        },
+        remove: (groupId, userId) =>
+          request<void>(`/admin/groups/${groupId}/members/${userId}`, z.void(), {
+            method: "DELETE",
+          }),
+      },
+    },
 
     createGroup: (body) => {
       CreateGroupBodySchema.parse(body);

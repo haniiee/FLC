@@ -74,7 +74,11 @@ export default function ProfileScreen() {
   useTabScrollToTop(ref);
   const version = Constants.expoConfig?.version ?? "0.1.0";
   const roleLabel =
-    user?.platformRole === "teacher" ? copy.profile.platformTeacher : copy.profile.platformMember;
+    user?.platformRole === "admin"
+      ? copy.profile.platformAdmin
+      : user?.platformRole === "teacher"
+        ? copy.profile.platformTeacher
+        : copy.profile.platformMember;
 
   function confirmLogout() {
     Alert.alert(copy.profile.logOutConfirmTitle, copy.profile.logOutConfirmMessage, [

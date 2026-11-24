@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const PlatformRoleSchema = z.enum(["teacher", "user"]);
+export const PlatformRoleSchema = z.enum(["teacher", "user", "admin"]);
 export type PlatformRole = z.infer<typeof PlatformRoleSchema>;
 
 export const GroupRoleSchema = z.enum(["teacher", "assistant", "student"]);
@@ -11,6 +11,7 @@ export const UserSchema = z.object({
   phone: z.string(),
   displayName: z.string(),
   platformRole: PlatformRoleSchema,
+  mustChangePassword: z.boolean(),
   createdAt: z.string().datetime(),
 });
 export type User = z.infer<typeof UserSchema>;
@@ -50,6 +51,12 @@ export const LogoutBodySchema = z.object({
   refreshToken: z.string().min(1),
 });
 export type LogoutBody = z.infer<typeof LogoutBodySchema>;
+
+export const ChangePasswordBodySchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8),
+});
+export type ChangePasswordBody = z.infer<typeof ChangePasswordBodySchema>;
 
 export const MeResponseSchema = z.object({
   user: UserSchema,

@@ -18,6 +18,14 @@ export function AppHeader() {
         </Link>
         {isAuthenticated ? (
           <div className="flex items-center gap-2">
+            {user?.platformRole === "admin" ? (
+              <Link
+                href="/admin"
+                className="rounded-md px-2 py-1 text-xs font-medium text-white/95 hover:bg-white/10"
+              >
+                Admin
+              </Link>
+            ) : null}
             <span className="max-w-[140px] truncate text-xs text-white/90">
               {user?.displayName}
             </span>

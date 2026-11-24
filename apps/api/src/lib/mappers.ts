@@ -8,6 +8,7 @@ export function toUserDto(user: DbUser): User {
     phone: user.phone,
     displayName: user.displayName,
     platformRole: user.platformRole,
+    mustChangePassword: user.mustChangePassword,
     createdAt: user.createdAt.toISOString(),
   };
 }
