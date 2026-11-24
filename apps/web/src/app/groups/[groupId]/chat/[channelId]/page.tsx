@@ -4,7 +4,7 @@ import type { ChatChannelKind } from "@app/shared-types";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   applyOptimistic,
@@ -18,6 +18,7 @@ import {
   type ClientChatMessage,
 } from "../../../../../chat/cache";
 import { chatChannelsQueryKey, chatMessagesQueryKey } from "../../../../../chat/query-keys";
+import { createSerialQueue } from "../../../../../chat/serial-queue";
 import { uploadChatVoice } from "../../../../../chat/upload-chat-voice";
 import { ChatComposer } from "../../../../../components/chat/ChatComposer";
 import { ConnectionBanner } from "../../../../../components/chat/ConnectionBanner";
@@ -39,6 +40,8 @@ export default function ChatChannelPage() {
   const { user } = useAuth();
   const { connected } = useChannel(channelId);
   const [replyTo, setReplyTo] = useState<ClientChatMessage | null>(null);
+  /** Keep voice uploads FIFO so server createdAt matches send order. */
+  const enqueueVoiceSend = useRef(createSerialQueue()).current;
 
   const groupQuery = useQuery({
     queryKey: ["group", groupId],
@@ -118,9 +121,9 @@ export default function ChatChannelPage() {
   );
 
   const sendVoice = useCallback(
-    async (result: RecorderResult) => {
+    (result: RecorderResult) => {
       if (!user) return;
-      const tempId = `temp-voice-${Date.now()}`;
+      const tempId = `temp-voice-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const optimistic: ClientChatMessage = {
         id: tempId,
         tempId,
@@ -141,27 +144,34 @@ export default function ChatChannelPage() {
           role: groupQuery.data?.myRole ?? "student",
         },
       };
+      // Show bubble immediately; upload waits for any earlier voice to finish.
       patchCache((prev) => applyOptimistic(prev, optimistic));
+      setReplyTo(null);
 
-      try {
-        const completed = await uploadChatVoice({
-          channelId,
-          blob: result.blob,
-          mimeType: result.mimeType,
-          onProgress: (progress) => {
-            patchCache((prev) =>
-              applyUpdate(prev, { ...optimistic, uploadProgress: progress, status: "pending" }),
-            );
-          },
-        });
-        patchCache((prev) => replaceOptimistic(prev, tempId, completed));
-        setReplyTo(null);
-      } catch (error) {
-        patchCache((prev) => markOptimisticFailed(prev, tempId));
-        toast.error(apiErrorMessage(error, copy.chat.voiceSendFailed));
-      }
+      void enqueueVoiceSend(async () => {
+        try {
+          const completed = await uploadChatVoice({
+            channelId,
+            blob: result.blob,
+            mimeType: result.mimeType,
+            onProgress: (progress) => {
+              patchCache((prev) =>
+                applyUpdate(prev, {
+                  ...optimistic,
+                  uploadProgress: progress,
+                  status: "pending",
+                }),
+              );
+            },
+          });
+          patchCache((prev) => replaceOptimistic(prev, tempId, completed));
+        } catch (error) {
+          patchCache((prev) => markOptimisticFailed(prev, tempId));
+          toast.error(apiErrorMessage(error, copy.chat.voiceSendFailed));
+        }
+      });
     },
-    [channelId, groupQuery.data?.myRole, patchCache, replyTo?.id, user],
+    [channelId, enqueueVoiceSend, groupQuery.data?.myRole, patchCache, replyTo?.id, user],
   );
 
   const deleteMutation = useMutation({

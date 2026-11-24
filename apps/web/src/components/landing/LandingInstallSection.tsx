@@ -46,7 +46,13 @@ export function LandingInstallSection() {
   const [guideOpen, setGuideOpen] = useState(false);
   const [installed, setInstalled] = useState(false);
   const [platform, setPlatform] = useState<"ios" | "android" | "other">("other");
-  const androidUrl = (process.env.NEXT_PUBLIC_ANDROID_APP_URL ?? "").trim() || "/downloads/flc.apk";
+  const configuredApk = (process.env.NEXT_PUBLIC_ANDROID_APP_URL ?? "").trim();
+  // The original public file was a dev-client APK. Release builds use a new path
+  // so phones don't keep the cached launcher build.
+  const androidUrl =
+    !configuredApk || configuredApk.endsWith("/downloads/flc.apk")
+      ? "https://i7dvqjmlrapwxkkb.public.blob.vercel-storage.com/downloads/flc-0.1.1.apk"
+      : configuredApk;
 
   useEffect(() => {
     if (isStandalone()) {

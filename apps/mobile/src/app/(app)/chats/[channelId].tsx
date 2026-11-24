@@ -57,6 +57,7 @@ import {
   failVoiceUpload,
 } from "../../../lib/chat-voice";
 import { copy } from "../../../lib/copy";
+import { createSerialQueue } from "../../../lib/serial-queue";
 import { putLocalFile, readLocalFileSize } from "../../../lib/upload-local-file";
 import { deleteLocalCapture, type VoiceCapture } from "../../../lib/upload-voice";
 import { useMiniPlayerPadding } from "../../../player/MiniPlayer";
@@ -91,6 +92,8 @@ export default function ChannelScreen() {
   const seenNewest = useRef<string | null>(null);
   const draftRef = useRef("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Keep voice uploads FIFO so server createdAt matches send order. */
+  const enqueueVoiceSend = useRef(createSerialQueue()).current;
   const [draft, setDraft] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const [menu, setMenu] = useState<ClientChatMessage | null>(null);
@@ -204,7 +207,7 @@ export default function ChannelScreen() {
     void deliver(text);
   }
 
-  async function deliverVoice(capture: VoiceCapture, existingTempId?: string) {
+  function deliverVoice(capture: VoiceCapture, existingTempId?: string) {
     if (!channelId || !user) return;
     const key = chatMessagesQueryKey(channelId);
     const clientId = existingTempId ?? createClientId();
@@ -225,48 +228,51 @@ export default function ChannelScreen() {
           role: myRole ?? "student",
         },
       });
+      // Show bubble immediately; upload waits for any earlier voice to finish.
       queryClient.setQueryData<ChatInfiniteData>(key, (prev) => applyOptimistic(prev, optimistic));
     }
 
-    let orphanMessageId: string | undefined;
-    try {
-      const sizeBytes = await readLocalFileSize(capture.uri, capture.fileName);
-      const prepared = await getApiClient().createChatVoiceUploadUrl(channelId, {
-        mimeType: capture.mimeType,
-        sizeBytes,
-      });
-      orphanMessageId = prepared.message.id;
-      queryClient.setQueryData<ChatInfiniteData>(key, (prev) =>
-        bindVoiceUploadId(prev, clientId, prepared.message.id),
-      );
-      await putLocalFile(prepared.uploadUrl, capture.uri, capture.mimeType);
-      const saved = await getApiClient().completeChatVoice(prepared.message.id);
-      orphanMessageId = undefined;
-      const withDuration =
-        saved.durationMs != null && saved.durationMs > 0
-          ? saved
-          : { ...saved, durationMs: capture.durationMs };
-      queryClient.setQueryData<ChatInfiniteData>(key, (prev) =>
-        replaceOptimistic(prev, clientId, withDuration),
-      );
+    void enqueueVoiceSend(async () => {
+      let orphanMessageId: string | undefined;
       try {
-        await deleteLocalCapture(capture.uri);
-      } catch {
-        // The message is already on the server.
-      }
-      if (groupId) void queryClient.invalidateQueries({ queryKey: ["chats", groupId] });
-    } catch {
-      const failed = failVoiceUpload(queryClient.getQueryData<ChatInfiniteData>(key), clientId);
-      queryClient.setQueryData<ChatInfiniteData>(key, failed.data);
-      const orphan = failed.orphanMessageId ?? orphanMessageId;
-      if (orphan) {
+        const sizeBytes = await readLocalFileSize(capture.uri, capture.fileName);
+        const prepared = await getApiClient().createChatVoiceUploadUrl(channelId, {
+          mimeType: capture.mimeType,
+          sizeBytes,
+        });
+        orphanMessageId = prepared.message.id;
+        queryClient.setQueryData<ChatInfiniteData>(key, (prev) =>
+          bindVoiceUploadId(prev, clientId, prepared.message.id),
+        );
+        await putLocalFile(prepared.uploadUrl, capture.uri, capture.mimeType);
+        const saved = await getApiClient().completeChatVoice(prepared.message.id);
+        orphanMessageId = undefined;
+        const withDuration =
+          saved.durationMs != null && saved.durationMs > 0
+            ? saved
+            : { ...saved, durationMs: capture.durationMs };
+        queryClient.setQueryData<ChatInfiniteData>(key, (prev) =>
+          replaceOptimistic(prev, clientId, withDuration),
+        );
         try {
-          await getApiClient().deleteChatMessage(orphan);
+          await deleteLocalCapture(capture.uri);
         } catch {
-          // The local row can still be retried from the recording.
+          // The message is already on the server.
+        }
+        if (groupId) void queryClient.invalidateQueries({ queryKey: ["chats", groupId] });
+      } catch {
+        const failed = failVoiceUpload(queryClient.getQueryData<ChatInfiniteData>(key), clientId);
+        queryClient.setQueryData<ChatInfiniteData>(key, failed.data);
+        const orphan = failed.orphanMessageId ?? orphanMessageId;
+        if (orphan) {
+          try {
+            await getApiClient().deleteChatMessage(orphan);
+          } catch {
+            // The local row can still be retried from the recording.
+          }
         }
       }
-    }
+    });
   }
 
   function onRetry(message: ClientChatMessage) {
