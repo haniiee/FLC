@@ -397,7 +397,10 @@ export function FrameSequence({
     const seekAudio = (progress: number) => {
       const audio = audioRef.current;
       if (!audio || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
-      const target = Math.min(Math.max(0, progress) * audio.duration, Math.max(0, audio.duration - 0.05));
+      const target = Math.min(
+        Math.max(0, progress) * audio.duration,
+        Math.max(0, audio.duration - 0.05),
+      );
       if (Math.abs(audio.currentTime - target) > 0.12) {
         audio.currentTime = target;
       }
@@ -405,7 +408,8 @@ export function FrameSequence({
 
     const requestPlay = (progress: number) => {
       const audio = audioRef.current;
-      if (!audio || audioStateRef.current === "starting" || audioStateRef.current === "blocked") return;
+      if (!audio || audioStateRef.current === "starting" || audioStateRef.current === "blocked")
+        return;
       if (!audio.paused && audioStateRef.current === "playing") return;
       const gen = ++playGen;
       audioStateRef.current = "starting";
@@ -442,10 +446,7 @@ export function FrameSequence({
       const pinActive = st?.isActive ?? true;
       const audio = audioRef.current;
       const audioClock =
-        audio &&
-        !audio.paused &&
-        Number.isFinite(audio.duration) &&
-        audio.duration > 0;
+        audio && !audio.paused && Number.isFinite(audio.duration) && audio.duration > 0;
 
       if (!pinActive) {
         if (audio && !audio.paused) audio.pause();
@@ -458,7 +459,10 @@ export function FrameSequence({
         let next = progressRef.current + dt / durationSec;
         if (next >= 1) next -= Math.floor(next);
         schedulePaintFromProgress(next);
-        if (audioStateRef.current === "idle" || (audioStateRef.current === "playing" && audio?.paused)) {
+        if (
+          audioStateRef.current === "idle" ||
+          (audioStateRef.current === "playing" && audio?.paused)
+        ) {
           scrollDrivenRef.current = false;
           requestPlay(next);
         }
@@ -514,7 +518,11 @@ export function FrameSequence({
             aria-label={muted ? landingCopy.sound.unmute : landingCopy.sound.mute}
             className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-4 z-40 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-[#070D1F]/45 text-white shadow-card backdrop-blur-md transition hover:bg-[#070D1F]/70 sm:right-8"
           >
-            {muted ? <VolumeX className="h-5 w-5" aria-hidden /> : <Volume2 className="h-5 w-5" aria-hidden />}
+            {muted ? (
+              <VolumeX className="h-5 w-5" aria-hidden />
+            ) : (
+              <Volume2 className="h-5 w-5" aria-hidden />
+            )}
           </button>
         )}
         {fit === "cover" ? <EdgeFade /> : null}
