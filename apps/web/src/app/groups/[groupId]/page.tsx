@@ -134,7 +134,12 @@ export default function GroupPage() {
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-secondary">{copy.content.classNotes}</h2>
           {canManage ? (
-            <Button type="button" variant="outline" className="w-full" onClick={() => setTextOpen(true)}>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => setTextOpen(true)}
+            >
               {copy.content.sendText}
             </Button>
           ) : null}

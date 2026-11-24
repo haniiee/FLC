@@ -62,8 +62,7 @@ function drawFrame(
   const ih = img.naturalHeight;
   if (!iw || !ih || !cssW || !cssH) return;
 
-  const scale =
-    fit === "contain" ? Math.min(cssW / iw, cssH / ih) : Math.max(cssW / iw, cssH / ih);
+  const scale = fit === "contain" ? Math.min(cssW / iw, cssH / ih) : Math.max(cssW / iw, cssH / ih);
   const dw = iw * scale;
   const dh = ih * scale;
   const dx = (cssW - dw) / 2;

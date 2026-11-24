@@ -35,19 +35,31 @@ export const landingCopy = {
   },
   installSection: {
     title: "Get FLC on your phone",
-    body: "iPhone adds FLC from Safari. Android installs the FLC app.",
-    iphone: {
-      kicker: "iPhone",
+    body: "Add FLC to your Home Screen from Safari or Chrome, or install the Android app.",
+    webApp: {
+      kicker: "Safari & Chrome",
       title: "Home screen app",
-      body: "Add FLC from Safari for one-tap access, lock-screen playback, and a full-screen class.",
-      cta: "Add to Home Screen",
-      sheetTitle: "Add FLC on iPhone",
-      steps: [
-        "Open this page in Safari.",
-        "Tap the Share button.",
-        "Tap Add to Home Screen.",
-        "Tap Add.",
-      ],
+      body: "Install FLC from your browser for one-tap access, lock-screen playback, and a full-screen class.",
+      cta: "How to add",
+      sheetTitle: "Add FLC to Home Screen",
+      safari: {
+        title: "Safari",
+        steps: [
+          "Open this page in Safari.",
+          "Tap the Share button.",
+          "Tap Add to Home Screen.",
+          "Tap Add.",
+        ],
+      },
+      chrome: {
+        title: "Chrome",
+        steps: [
+          "Open this page in Chrome.",
+          "Tap the menu (⋮).",
+          "Tap Add to Home screen or Install app.",
+          "Confirm Add / Install.",
+        ],
+      },
     },
     android: {
       kicker: "Android",

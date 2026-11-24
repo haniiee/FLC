@@ -38,7 +38,9 @@ export function LandingCta() {
                 <h3 className="mt-4 text-lg font-bold tracking-tight text-primary">
                   {feature.title}
                 </h3>
-                <p className="mt-2 text-sm leading-relaxed text-text-muted">{feature.description}</p>
+                <p className="mt-2 text-sm leading-relaxed text-text-muted">
+                  {feature.description}
+                </p>
               </article>
             );
           })}

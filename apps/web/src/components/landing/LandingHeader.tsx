@@ -17,7 +17,13 @@ export function LandingHeader({ overlay = true }: { overlay?: boolean }) {
     >
       <div className="pointer-events-auto flex items-center justify-between gap-3 px-4 py-4 sm:gap-4 sm:px-8 sm:py-5 lg:px-10">
         <Link href="/" className="flex min-w-0 items-center gap-2.5 sm:gap-3">
-          <img src={logoSrc} alt="" width={36} height={36} className="h-9 w-9 shrink-0 drop-shadow-md" />
+          <img
+            src={logoSrc}
+            alt=""
+            width={36}
+            height={36}
+            className="h-9 w-9 shrink-0 drop-shadow-md"
+          />
           <span className="min-w-0">
             <span className="block truncate text-base font-extrabold tracking-wide text-white">
               {landingCopy.brand.short}
