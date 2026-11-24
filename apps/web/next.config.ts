@@ -15,6 +15,8 @@ const withSerwist = withSerwistInit({
   swDest: "public/sw.js",
   disable: process.env.NODE_ENV === "development",
   additionalPrecacheEntries: [{ url: "/offline", revision }],
+  // Landing frames are runtime CacheFirst — keep them out of the install precache.
+  globPublicPatterns: ["**/*", "!frames/**", "!video/**", "!downloads/**"],
 });
 
 const nextConfig: NextConfig = {

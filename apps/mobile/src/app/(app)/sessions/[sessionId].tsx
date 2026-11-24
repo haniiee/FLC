@@ -10,6 +10,7 @@ import { Button } from "../../../components/Button";
 import { Card } from "../../../components/Card";
 import { ContentActionsRow } from "../../../components/content/ContentActionsRow";
 import { FileRow, OptimisticFileRow } from "../../../components/content/FileRow";
+import { TextNoteModal } from "../../../components/content/TextNoteModal";
 import { ItemActionsSheet } from "../../../components/content/ItemActionsSheet";
 import { RenameModal } from "../../../components/content/RenameModal";
 import { EmptyState } from "../../../components/EmptyState";
@@ -36,6 +37,7 @@ export default function SessionDetailScreen() {
   const [renameOpen, setRenameOpen] = useState(false);
   const [topicMenu, setTopicMenu] = useState<TopicSummary | null>(null);
   const [renameTopic, setRenameTopic] = useState<TopicSummary | null>(null);
+  const [textOpen, setTextOpen] = useState(false);
   const [pendingUpload, setPendingUpload] = useState<{ title: string; progress: number } | null>(
     null,
   );
@@ -161,6 +163,7 @@ export default function SessionDetailScreen() {
         {canManage ? (
           <ContentActionsRow
             onAddFile={() => void onAddFile()}
+            onSendText={() => setTextOpen(true)}
             onVoiceCaptured={(capture) => void voice.upload(capture)}
             voiceDisabled={Boolean(pendingUpload) || voice.pending?.status === "uploading"}
             leading={
@@ -306,6 +309,20 @@ export default function SessionDetailScreen() {
           if (!renameTopic) return;
           await getApiClient().updateTopic(renameTopic.id, { title });
           await refresh();
+        }}
+      />
+      <TextNoteModal
+        visible={textOpen}
+        onClose={() => setTextOpen(false)}
+        onSubmit={async (content) => {
+          try {
+            await getApiClient().createTextFile({ sessionId, content });
+            Alert.alert(copy.content.textAdded);
+            await refresh();
+          } catch (error) {
+            Alert.alert(copy.content.actionFailed, apiErrorMessage(error));
+            throw error;
+          }
         }}
       />
       <View style={{ height: insets.bottom }} />

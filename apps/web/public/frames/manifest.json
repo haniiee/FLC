@@ -1,0 +1,25 @@
+{
+  "source": "/video/aida.mp4",
+  "durationSec": 10,
+  "generatedAt": "2026-11-24T09:36:55.438Z",
+  "variants": {
+    "desktop": {
+      "fps": 24,
+      "width": 1280,
+      "height": 720,
+      "quality": 80,
+      "frameCount": 239,
+      "pathPrefix": "/frames/desktop/",
+      "pattern": "{index:04d}.webp"
+    },
+    "mobile": {
+      "fps": 16,
+      "width": 720,
+      "height": 406,
+      "quality": 72,
+      "frameCount": 159,
+      "pathPrefix": "/frames/mobile/",
+      "pattern": "{index:04d}.webp"
+    }
+  }
+}

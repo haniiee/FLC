@@ -4,9 +4,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { AuthShell } from "../../components/auth/AuthShell";
 import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
-import { Hero } from "../../components/ui/Hero";
 import { Input } from "../../components/ui/Input";
 import { copy } from "../../lib/copy";
 import { getApiClient } from "../../lib/api";
@@ -16,7 +15,8 @@ import { useAuth } from "../../providers/auth-provider";
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") || "/";
+  const rawNext = searchParams.get("next") || "/home";
+  const next = rawNext === "/" || rawNext === "/welcome" ? "/home" : rawNext;
   const { user, setSessionFromAuth, isAuthenticated, isLoading } = useAuth();
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -50,45 +50,50 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="mx-auto max-w-md space-y-4">
-      <Hero>
-        <h1 className="text-2xl font-extrabold">{copy.auth.welcomeBack}</h1>
-        <p className="mt-2 text-sm text-white/80">{copy.auth.loginSubtitle}</p>
-      </Hero>
-      <Card className="space-y-4">
-        <form className="space-y-3" onSubmit={(event) => void onSubmit(event)}>
-          <Input
-            label={copy.auth.phone}
-            inputMode="tel"
-            autoComplete="tel"
-            placeholder={copy.auth.phonePlaceholder}
-            value={phone}
-            onChange={(event) => setPhone(event.target.value)}
-            required
-            dir="ltr"
-          />
-          <Input
-            label={copy.auth.password}
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? copy.auth.loggingIn : copy.auth.logIn}
-          </Button>
-        </form>
-        <p className="text-center text-sm text-text-muted">
+    <AuthShell
+      title={copy.auth.welcomeBack}
+      subtitle={copy.auth.loginSubtitle}
+      footer={
+        <>
           {copy.auth.newHere}{" "}
           <Link
-            className="font-medium text-primary underline"
+            className="font-semibold text-[#FDAD3E] underline-offset-2 hover:underline"
             href={`/register?next=${encodeURIComponent(next)}`}
           >
             {copy.auth.createAccountLink}
           </Link>
-        </p>
-      </Card>
-    </div>
+        </>
+      }
+    >
+      <form className="space-y-4" onSubmit={(event) => void onSubmit(event)}>
+        <Input
+          label={copy.auth.phone}
+          inputMode="tel"
+          autoComplete="tel"
+          placeholder={copy.auth.phonePlaceholder}
+          value={phone}
+          onChange={(event) => setPhone(event.target.value)}
+          required
+          dir="ltr"
+          className="rounded-xl border-primary/10 bg-[#F6F7FB] py-3 focus:border-secondary focus:ring-[#FDAD3E]/25"
+        />
+        <Input
+          label={copy.auth.password}
+          type="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          required
+          className="rounded-xl border-primary/10 bg-[#F6F7FB] py-3 focus:border-secondary focus:ring-[#FDAD3E]/25"
+        />
+        <Button
+          type="submit"
+          className="mt-2 w-full rounded-full bg-[#FDAD3E] py-3.5 text-[#1A1205] shadow-[0_16px_40px_-20px_rgba(253,173,62,0.9)] hover:bg-[#FDAD3E] hover:brightness-105"
+          disabled={loading}
+        >
+          {loading ? copy.auth.loggingIn : copy.auth.logIn}
+        </Button>
+      </form>
+    </AuthShell>
   );
 }

@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ItemActionsMenu } from "../../../components/content/ItemActionsMenu";
 import { canManageContent, FileRow, OptimisticFileRow } from "../../../components/files/FileRow";
+import { TextNoteSheet } from "../../../components/files/TextNoteSheet";
 import { UploadSheet } from "../../../components/files/UploadSheet";
 import { RecordButton, type PendingUpload } from "../../../components/recorder/RecordButton";
 import { Button } from "../../../components/ui/Button";
@@ -26,6 +27,7 @@ export default function SessionPage() {
   const queryClient = useQueryClient();
   const player = usePlayer();
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [textOpen, setTextOpen] = useState(false);
   const [pending, setPending] = useState<PendingUpload[]>([]);
   const prevStatuses = useRef<Map<string, string>>(new Map());
 
@@ -139,6 +141,14 @@ export default function SessionPage() {
             >
               {copy.content.addFile}
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={() => setTextOpen(true)}
+            >
+              {copy.content.sendText}
+            </Button>
           </>
         ) : null}
       </div>
@@ -207,6 +217,20 @@ export default function SessionPage() {
         onClose={() => setUploadOpen(false)}
         sessionId={sessionId}
         onDone={() => void refresh()}
+      />
+      <TextNoteSheet
+        open={textOpen}
+        onClose={() => setTextOpen(false)}
+        onSubmit={async (content) => {
+          try {
+            await getApiClient().createTextFile({ sessionId, content });
+            toast.success(copy.content.textAdded);
+            await refresh();
+          } catch (error) {
+            toast.error(apiErrorMessage(error));
+            throw error;
+          }
+        }}
       />
 
       {canManage ? (

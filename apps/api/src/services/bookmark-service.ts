@@ -21,7 +21,7 @@ type BookmarkRow = {
   createdAt: Date;
   file: typeof files.$inferSelect;
   groupName: string;
-  sessionNumber: number;
+  sessionNumber: number | null;
   sessionTitle: string | null;
   topicNumber: number | null;
   topicTitle: string | null;
@@ -76,7 +76,7 @@ async function selectRows(userId: string, bookmarkId?: string, filter?: Bookmark
     .from(bookmarks)
     .innerJoin(files, eq(files.id, bookmarks.fileId))
     .innerJoin(groups, eq(groups.id, files.groupId))
-    .innerJoin(sessions, eq(sessions.id, files.sessionId))
+    .leftJoin(sessions, eq(sessions.id, files.sessionId))
     .leftJoin(topics, eq(topics.id, files.topicId))
     .where(and(...conditions))
     .orderBy(desc(bookmarks.createdAt));
@@ -111,10 +111,13 @@ async function toDtos(userId: string, rows: BookmarkRow[]): Promise<Bookmark[]> 
         groupId: row.file.groupId,
         groupDisplayName: row.groupName,
         sessionId: row.file.sessionId,
-        sessionDisplayName: sessionDisplayName({
-          number: row.sessionNumber,
-          title: row.sessionTitle,
-        }),
+        sessionDisplayName:
+          row.sessionNumber == null
+            ? ""
+            : sessionDisplayName({
+                number: row.sessionNumber,
+                title: row.sessionTitle,
+              }),
         topicId: row.file.topicId,
         topicDisplayName:
           row.topicNumber == null

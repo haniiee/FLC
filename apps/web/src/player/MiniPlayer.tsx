@@ -1,6 +1,7 @@
 "use client";
 
 import clsx from "clsx";
+import { X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { copy } from "../lib/copy";
 import { useAuth } from "../providers/auth-provider";
@@ -73,6 +74,14 @@ export function MiniPlayer() {
               onClick={() => player.next()}
             >
               ⏭
+            </button>
+            <button
+              type="button"
+              aria-label={copy.player.close}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-text-muted hover:bg-border/60 hover:text-text"
+              onClick={() => player.dismiss()}
+            >
+              <X size={18} />
             </button>
           </div>
         </div>

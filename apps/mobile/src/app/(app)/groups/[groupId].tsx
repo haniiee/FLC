@@ -8,7 +8,9 @@ import { AppText } from "../../../components/AppText";
 import { Button } from "../../../components/Button";
 import { Card } from "../../../components/Card";
 import { Chip, roleChipVariant } from "../../../components/Chip";
+import { FileRow } from "../../../components/content/FileRow";
 import { ItemActionsSheet } from "../../../components/content/ItemActionsSheet";
+import { TextNoteModal } from "../../../components/content/TextNoteModal";
 import { RenameModal } from "../../../components/content/RenameModal";
 import { EmptyState } from "../../../components/EmptyState";
 import { ErrorBanner } from "../../../components/ErrorBanner";
@@ -37,6 +39,7 @@ export default function GroupDetailScreen() {
   const queryClient = useQueryClient();
   const [actionsSessionId, setActionsSessionId] = useState<string | null>(null);
   const [renameSessionId, setRenameSessionId] = useState<string | null>(null);
+  const [textOpen, setTextOpen] = useState(false);
 
   const groupQuery = useQuery({
     queryKey: ["group", groupId],
@@ -47,6 +50,12 @@ export default function GroupDetailScreen() {
   const sessionsQuery = useQuery({
     queryKey: ["sessions", groupId],
     queryFn: () => getApiClient().listSessions(groupId),
+    enabled: Boolean(groupId),
+  });
+
+  const filesQuery = useQuery({
+    queryKey: ["group-files", groupId],
+    queryFn: () => getApiClient().listGroupFiles(groupId),
     enabled: Boolean(groupId),
   });
 
@@ -76,6 +85,7 @@ export default function GroupDetailScreen() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["sessions", groupId] }),
       queryClient.invalidateQueries({ queryKey: ["chats", groupId] }),
+      queryClient.invalidateQueries({ queryKey: ["group-files", groupId] }),
     ]);
   }
 
@@ -195,6 +205,27 @@ export default function GroupDetailScreen() {
             </View>
           ) : null}
 
+          {(canManage || (filesQuery.data?.files.length ?? 0) > 0) && (
+            <View style={{ gap: spacing[3] }}>
+              <AppText variant="h2">{copy.content.classNotes}</AppText>
+              {canManage ? (
+                <Button
+                  title={copy.content.sendText}
+                  variant="outline"
+                  onPress={() => setTextOpen(true)}
+                />
+              ) : null}
+              {(filesQuery.data?.files ?? []).map((file) => (
+                <FileRow
+                  key={file.id}
+                  file={file}
+                  canManage={canManage}
+                  onChanged={() => void filesQuery.refetch()}
+                />
+              ))}
+            </View>
+          )}
+
           <AppText variant="h2">{copy.group.sessions}</AppText>
 
           {sessionsQuery.isError ? (
@@ -294,6 +325,21 @@ export default function GroupDetailScreen() {
           }}
         />
       ) : null}
+
+      <TextNoteModal
+        visible={textOpen}
+        onClose={() => setTextOpen(false)}
+        onSubmit={async (content) => {
+          try {
+            await getApiClient().createTextFile({ groupId, content });
+            Alert.alert(copy.content.textAdded);
+            await filesQuery.refetch();
+          } catch (error) {
+            Alert.alert(copy.content.actionFailed, apiErrorMessage(error));
+            throw error;
+          }
+        }}
+      />
 
       <RenameModal
         visible={Boolean(renameSession)}

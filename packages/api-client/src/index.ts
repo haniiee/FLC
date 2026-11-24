@@ -26,6 +26,7 @@ import {
   CreateTopicBodySchema,
   FileSchema,
   FileUrlResponseSchema,
+  GroupFilesResponseSchema,
   GroupDetailSchema,
   GroupMembersResponseSchema,
   GroupsListResponseSchema,
@@ -93,6 +94,7 @@ import {
   type CreateTextFileBody,
   type CreateTopicBody,
   type FileDto,
+  type GroupFilesResponse,
   type FileKind,
   type FileUrlResponse,
   type GroupDetail,
@@ -228,6 +230,7 @@ export type ApiClient = {
   getInvite: (code: string) => Promise<PublicInvite>;
   joinInvite: (code: string) => Promise<JoinInviteResponse>;
   listSessions: (groupId: string) => Promise<SessionsListResponse>;
+  listGroupFiles: (groupId: string) => Promise<GroupFilesResponse>;
   createSession: (groupId: string, body?: CreateSessionBody) => Promise<SessionSummary>;
   getSession: (id: string) => Promise<SessionDetail>;
   updateSession: (id: string, body: UpdateTitleBody) => Promise<SessionSummary>;
@@ -614,6 +617,7 @@ export function createApiClient(baseUrl: string, options: ApiClientOptions = {})
       request(`/invites/${code}/join`, JoinInviteResponseSchema, { method: "POST" }),
 
     listSessions: (groupId) => request(`/groups/${groupId}/sessions`, SessionsListResponseSchema),
+    listGroupFiles: (groupId) => request(`/groups/${groupId}/files`, GroupFilesResponseSchema),
     createSession: (groupId, body = {}) => {
       CreateSessionBodySchema.parse(body);
       return request(`/groups/${groupId}/sessions`, SessionSummarySchema, {

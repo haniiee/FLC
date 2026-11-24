@@ -4,8 +4,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { ItemActionsMenu } from "../../../components/content/ItemActionsMenu";
 import { canManageContent, FileRow, OptimisticFileRow } from "../../../components/files/FileRow";
+import { TextNoteSheet } from "../../../components/files/TextNoteSheet";
 import { UploadSheet } from "../../../components/files/UploadSheet";
 import { RecordButton, type PendingUpload } from "../../../components/recorder/RecordButton";
 import { AddToPlaylistModal } from "../../../components/playlists/AddToPlaylistModal";
@@ -15,6 +17,7 @@ import { Hero } from "../../../components/ui/Hero";
 import { Spinner } from "../../../components/ui/Spinner";
 import { getApiClient } from "../../../lib/api";
 import { copy } from "../../../lib/copy";
+import { apiErrorMessage } from "../../../lib/format";
 import { usePlayer } from "../../../player/context";
 import { filesRefetchInterval } from "../../../recorder/refetch-interval";
 
@@ -24,6 +27,7 @@ export default function TopicPage() {
   const queryClient = useQueryClient();
   const player = usePlayer();
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [textOpen, setTextOpen] = useState(false);
   const [pending, setPending] = useState<PendingUpload[]>([]);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
@@ -139,9 +143,19 @@ export default function TopicPage() {
       </Hero>
 
       {canManage ? (
-        <Button type="button" className="w-full" onClick={() => setUploadOpen(true)}>
-          {copy.content.addFile}
-        </Button>
+        <div className="flex gap-2">
+          <Button type="button" className="flex-1" onClick={() => setUploadOpen(true)}>
+            {copy.content.addFile}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1"
+            onClick={() => setTextOpen(true)}
+          >
+            {copy.content.sendText}
+          </Button>
+        </div>
       ) : null}
 
       {readyAudio.length > 0 ? (
@@ -194,6 +208,22 @@ export default function TopicPage() {
         topicId={topicId}
         onDone={() => void refresh()}
       />
+      {sessionId ? (
+        <TextNoteSheet
+          open={textOpen}
+          onClose={() => setTextOpen(false)}
+          onSubmit={async (content) => {
+            try {
+              await getApiClient().createTextFile({ sessionId, topicId, content });
+              toast.success(copy.content.textAdded);
+              await refresh();
+            } catch (error) {
+              toast.error(apiErrorMessage(error));
+              throw error;
+            }
+          }}
+        />
+      ) : null}
 
       {selectMode && selectedIds.size > 0 ? (
         <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] left-0 right-0 z-40 mx-auto flex max-w-[720px] gap-2 border-t border-border bg-background px-4 py-3 shadow-soft">

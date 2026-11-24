@@ -56,12 +56,27 @@ function isStaticAsset(request: Request, url: URL): boolean {
   return false;
 }
 
+function isLandingFrame(url: URL): boolean {
+  return (
+    url.pathname.startsWith("/frames/") &&
+    (url.pathname.endsWith(".webp") || url.pathname.endsWith("manifest.json"))
+  );
+}
+
 const runtimeCaching: RuntimeCaching[] = [
   {
     matcher({ request, url }) {
       return isMediaOrRange(request) || isApiOrS3(url);
     },
     handler: new NetworkOnly(),
+  },
+  {
+    matcher({ url }) {
+      return isLandingFrame(url);
+    },
+    handler: new CacheFirst({
+      cacheName: "flc-landing-frames",
+    }),
   },
   {
     matcher({ request, url }) {

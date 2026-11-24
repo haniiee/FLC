@@ -27,7 +27,7 @@ export type CreateTopicBody = z.infer<typeof CreateTopicBodySchema>;
 export const FileSchema = z.object({
   id: z.string().uuid(),
   groupId: z.string().uuid(),
-  sessionId: z.string().uuid(),
+  sessionId: z.string().uuid().nullable(),
   topicId: z.string().uuid().nullable(),
   kind: FileKindSchema,
   number: z.number().int().positive().nullable(),
@@ -115,12 +115,23 @@ export const CompleteFileBodySchema = z.object({
 });
 export type CompleteFileBody = z.infer<typeof CompleteFileBodySchema>;
 
-export const CreateTextFileBodySchema = z.object({
-  sessionId: z.string().uuid(),
-  topicId: z.string().uuid().optional(),
-  content: z.string().min(1),
-});
+export const CreateTextFileBodySchema = z.union([
+  z.object({
+    sessionId: z.string().uuid(),
+    topicId: z.string().uuid().optional(),
+    content: z.string().min(1),
+  }),
+  z.object({
+    groupId: z.string().uuid(),
+    content: z.string().min(1),
+  }),
+]);
 export type CreateTextFileBody = z.infer<typeof CreateTextFileBodySchema>;
+
+export const GroupFilesResponseSchema = z.object({
+  files: z.array(FileSchema),
+});
+export type GroupFilesResponse = z.infer<typeof GroupFilesResponseSchema>;
 
 export const FileUrlResponseSchema = z.object({
   url: z.string().url(),
@@ -208,7 +219,7 @@ export const BookmarkFileSchema = z.object({
   mimeType: z.string(),
   groupId: z.string().uuid(),
   groupDisplayName: z.string(),
-  sessionId: z.string().uuid(),
+  sessionId: z.string().uuid().nullable(),
   sessionDisplayName: z.string(),
   topicId: z.string().uuid().nullable(),
   topicDisplayName: z.string().nullable(),

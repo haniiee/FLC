@@ -9,6 +9,7 @@ import { Button } from "../../../components/Button";
 import { ContentActionsRow } from "../../../components/content/ContentActionsRow";
 import { AddToPlaylistSheet } from "../../../components/content/AddToPlaylistSheet";
 import { FileRow, OptimisticFileRow } from "../../../components/content/FileRow";
+import { TextNoteModal } from "../../../components/content/TextNoteModal";
 import { ItemActionsSheet } from "../../../components/content/ItemActionsSheet";
 import { RenameModal } from "../../../components/content/RenameModal";
 import { EmptyState } from "../../../components/EmptyState";
@@ -37,6 +38,7 @@ export default function TopicDetailScreen() {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [addOpen, setAddOpen] = useState(false);
+  const [textOpen, setTextOpen] = useState(false);
   const [pendingUpload, setPendingUpload] = useState<{ title: string; progress: number } | null>(
     null,
   );
@@ -168,6 +170,7 @@ export default function TopicDetailScreen() {
         {canManage && !selecting ? (
           <ContentActionsRow
             onAddFile={() => void onAddFile()}
+            onSendText={() => setTextOpen(true)}
             onVoiceCaptured={(capture) => void voice.upload(capture)}
             voiceDisabled={Boolean(pendingUpload) || voice.pending?.status === "uploading"}
           />
@@ -318,6 +321,22 @@ export default function TopicDetailScreen() {
           />
         </View>
       ) : null}
+
+      <TextNoteModal
+        visible={textOpen}
+        onClose={() => setTextOpen(false)}
+        onSubmit={async (content) => {
+          if (!sessionId) return;
+          try {
+            await getApiClient().createTextFile({ sessionId, topicId, content });
+            Alert.alert(copy.content.textAdded);
+            await refresh();
+          } catch (error) {
+            Alert.alert(copy.content.actionFailed, apiErrorMessage(error));
+            throw error;
+          }
+        }}
+      />
 
       <AddToPlaylistSheet
         visible={addOpen}

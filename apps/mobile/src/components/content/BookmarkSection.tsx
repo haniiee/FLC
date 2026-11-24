@@ -92,6 +92,10 @@ export function BookmarkSection() {
       const topic = await getApiClient().getTopic(item.file.topicId);
       return topic.files.find((file) => file.id === item.fileId)?.textContent ?? "";
     }
+    if (!item.file.sessionId) {
+      const listed = await getApiClient().listGroupFiles(item.file.groupId);
+      return listed.files.find((file) => file.id === item.fileId)?.textContent ?? "";
+    }
     const session = await getApiClient().getSession(item.file.sessionId);
     return session.files.find((file) => file.id === item.fileId)?.textContent ?? "";
   }

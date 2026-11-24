@@ -58,6 +58,7 @@ export const copy = {
     nothingInFilter: "Nothing in this filter",
   },
   auth: {
+    backToLanding: "Back to home",
     welcomeBack: "Welcome back",
     loginSubtitle: "Log in to continue learning",
     phone: "Phone number",
@@ -177,6 +178,8 @@ export const copy = {
     sessionFiles: "Session files",
     newTopic: "New topic",
     addFile: "Add file",
+    sendText: "Send text",
+    classNotes: "Class notes",
     emptyTopics: "No topics yet",
     emptyFiles: "No files yet",
     topicCreated: "Topic created",

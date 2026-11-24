@@ -15,6 +15,7 @@ coverage
 .playwright-mcp
 phase3a-*.png
 apps/web/.tmp-*
+apps/web/public/downloads/*.apk
 .tools
 # Serwist
 apps/web/public/sw.js

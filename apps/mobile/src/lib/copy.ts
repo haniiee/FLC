@@ -177,6 +177,11 @@ export const copy = {
     sessionFiles: "Session files",
     newTopic: "New topic",
     addFile: "Add file",
+    sendText: "Send text",
+    textNote: "Text note",
+    writeTextPlaceholder: "Write your note…",
+    textAdded: "Text added",
+    classNotes: "Class notes",
     emptyTopics: "No topics yet",
     emptyFiles: "No files yet",
     emptyTopicsTeacher: "Create the first topic",
@@ -259,5 +264,6 @@ export const copy = {
     showPassword: "Show password",
     hidePassword: "Hide password",
     recordVoice: "Hold to record a voice message",
+    closePlayer: "Close player",
   },
 } as const;

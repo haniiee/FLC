@@ -140,12 +140,7 @@ function SidebarFooter() {
               strokeWidth="1.8"
               strokeLinecap="round"
             />
-            <path
-              d="M13 12H4"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-            />
+            <path d="M13 12H4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
             <path
               d="M6.5 9.2 3.7 12l2.8 2.8"
               stroke="currentColor"

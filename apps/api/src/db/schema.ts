@@ -131,9 +131,7 @@ export const files = pgTable(
     groupId: uuid("group_id")
       .notNull()
       .references(() => groups.id, { onDelete: "cascade" }),
-    sessionId: uuid("session_id")
-      .notNull()
-      .references(() => sessions.id, { onDelete: "cascade" }),
+    sessionId: uuid("session_id").references(() => sessions.id, { onDelete: "cascade" }),
     topicId: uuid("topic_id").references(() => topics.id, { onDelete: "cascade" }),
     kind: fileKindEnum("kind").notNull(),
     number: integer("number"),
@@ -159,6 +157,9 @@ export const files = pgTable(
     uniqueIndex("files_topic_kind_number_uq")
       .on(table.topicId, table.kind, table.number)
       .where(sql`${table.topicId} is not null`),
+    uniqueIndex("files_group_direct_kind_number_uq")
+      .on(table.groupId, table.kind, table.number)
+      .where(sql`${table.sessionId} is null and ${table.topicId} is null`),
   ],
 );
 

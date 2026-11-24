@@ -4,9 +4,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import { AuthShell } from "../../components/auth/AuthShell";
 import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
-import { Hero } from "../../components/ui/Hero";
 import { Input } from "../../components/ui/Input";
 import { copy } from "../../lib/copy";
 import { getApiClient } from "../../lib/api";
@@ -16,7 +15,8 @@ import { useAuth } from "../../providers/auth-provider";
 export default function RegisterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") || "/";
+  const rawNext = searchParams.get("next") || "/home";
+  const next = rawNext === "/" || rawNext === "/welcome" ? "/home" : rawNext;
   const { setSessionFromAuth } = useAuth();
   const [displayName, setDisplayName] = useState("");
   const [phone, setPhone] = useState("");
@@ -39,53 +39,59 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="mx-auto max-w-md space-y-4">
-      <Hero>
-        <h1 className="text-2xl font-extrabold">{copy.auth.createAccountTitle}</h1>
-        <p className="mt-2 text-sm text-white/80">{copy.auth.registerSubtitle}</p>
-      </Hero>
-      <Card className="space-y-4">
-        <form className="space-y-3" onSubmit={(event) => void onSubmit(event)}>
-          <Input
-            label={copy.auth.displayName}
-            value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
-            required
-            dir="auto"
-          />
-          <Input
-            label={copy.auth.phone}
-            inputMode="tel"
-            autoComplete="tel"
-            placeholder={copy.auth.phonePlaceholder}
-            value={phone}
-            onChange={(event) => setPhone(event.target.value)}
-            required
-            dir="ltr"
-          />
-          <Input
-            label={copy.auth.passwordMinHint}
-            type="password"
-            autoComplete="new-password"
-            minLength={8}
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? copy.auth.creatingAccount : copy.auth.createAccountCta}
-          </Button>
-        </form>
-        <p className="text-center text-sm text-text-muted">
+    <AuthShell
+      title={copy.auth.createAccountTitle}
+      subtitle={copy.auth.registerSubtitle}
+      footer={
+        <>
           {copy.auth.alreadyHaveAccount}{" "}
           <Link
-            className="font-medium text-primary underline"
+            className="font-semibold text-[#FDAD3E] underline-offset-2 hover:underline"
             href={`/login?next=${encodeURIComponent(next)}`}
           >
             {copy.auth.logInLink}
           </Link>
-        </p>
-      </Card>
-    </div>
+        </>
+      }
+    >
+      <form className="space-y-4" onSubmit={(event) => void onSubmit(event)}>
+        <Input
+          label={copy.auth.displayName}
+          value={displayName}
+          onChange={(event) => setDisplayName(event.target.value)}
+          required
+          dir="auto"
+          className="rounded-xl border-primary/10 bg-[#F6F7FB] py-3 focus:border-secondary focus:ring-[#FDAD3E]/25"
+        />
+        <Input
+          label={copy.auth.phone}
+          inputMode="tel"
+          autoComplete="tel"
+          placeholder={copy.auth.phonePlaceholder}
+          value={phone}
+          onChange={(event) => setPhone(event.target.value)}
+          required
+          dir="ltr"
+          className="rounded-xl border-primary/10 bg-[#F6F7FB] py-3 focus:border-secondary focus:ring-[#FDAD3E]/25"
+        />
+        <Input
+          label={copy.auth.passwordMinHint}
+          type="password"
+          autoComplete="new-password"
+          minLength={8}
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          required
+          className="rounded-xl border-primary/10 bg-[#F6F7FB] py-3 focus:border-secondary focus:ring-[#FDAD3E]/25"
+        />
+        <Button
+          type="submit"
+          className="mt-2 w-full rounded-full bg-[#FDAD3E] py-3.5 text-[#1A1205] shadow-[0_16px_40px_-20px_rgba(253,173,62,0.9)] hover:bg-[#FDAD3E] hover:brightness-105"
+          disabled={loading}
+        >
+          {loading ? copy.auth.creatingAccount : copy.auth.createAccountCta}
+        </Button>
+      </form>
+    </AuthShell>
   );
 }

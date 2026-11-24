@@ -37,6 +37,8 @@ export type PlayerApi = {
   jumpTo: (index: number) => void;
   openFullPlayer: () => void;
   closeFullPlayer: () => void;
+  /** Stop audio, clear the queue, and hide the mini player. */
+  dismiss: () => void;
   resumeSaved: () => Promise<void>;
   dismissResume: () => void;
   isCurrentFile: (fileId: string) => boolean;

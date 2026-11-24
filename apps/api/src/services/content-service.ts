@@ -1,7 +1,7 @@
 import { and, asc, count, eq, inArray, isNull, lt, ne } from "drizzle-orm";
 import type { GroupRole } from "@app/shared-types";
 import { db } from "../db";
-import { files, sessions, topics, type FileRow } from "../db/schema";
+import { files, groups, sessions, topics, type FileRow } from "../db/schema";
 import { toFileDto, toSessionSummary, toTopicSummary, visibleFiles } from "../lib/content-mappers";
 import { fileDisplayName, topicDisplayName } from "@app/shared-types";
 import { AppError, badRequest, notFound } from "../lib/errors";
@@ -365,6 +365,7 @@ export async function completeFileUpload(fileId: string): Promise<CompleteFileRe
       const processing = await db.transaction(async (tx) => {
         const number = await fileNumberForComplete(tx, {
           id: file.id,
+          groupId: file.groupId,
           sessionId: file.sessionId,
           topicId: file.topicId,
           kind: file.kind,
@@ -393,6 +394,7 @@ export async function completeFileUpload(fileId: string): Promise<CompleteFileRe
     const ready = await db.transaction(async (tx) => {
       const number = await fileNumberForComplete(tx, {
         id: file.id,
+        groupId: file.groupId,
         sessionId: file.sessionId,
         topicId: file.topicId,
         kind: file.kind,
@@ -460,20 +462,74 @@ export async function reprocessFile(fileId: string): Promise<CompleteFileResult>
   return { file: toFileDto(processing), httpStatus: 202 };
 }
 
-export async function createTextFile(input: {
-  userId: string;
-  sessionId: string;
-  topicId?: string;
-  content: string;
-}) {
-  const { session, topic } = await resolveSessionAndTopic(input.sessionId, input.topicId);
+export async function listGroupFiles(groupId: string, role: GroupRole) {
+  const rows = visibleFiles(
+    await db.query.files.findMany({
+      where: and(eq(files.groupId, groupId), isNull(files.sessionId), isNull(files.topicId)),
+      orderBy: [asc(files.createdAt)],
+    }),
+    canSeeIncomplete(role),
+  );
+  return rows.map((file) => toFileDto(file, { includeText: file.kind === "text" }));
+}
+
+export async function createTextFile(
+  input: { userId: string; content: string } & (
+    | { groupId: string; sessionId?: undefined; topicId?: undefined }
+    | { sessionId: string; topicId?: string; groupId?: undefined }
+  ),
+) {
   const content = input.content.trim();
   if (!content) {
     throw badRequest("EMPTY_TEXT", "متن خالی است");
   }
 
+  if ("groupId" in input && input.groupId) {
+    const group = await db.query.groups.findFirst({ where: eq(groups.id, input.groupId) });
+    if (!group) {
+      throw notFound("GROUP_NOT_FOUND", "کلاس پیدا نشد");
+    }
+    const file = await db.transaction(async (tx) => {
+      const number = await nextFileNumber(tx, {
+        groupId: group.id,
+        sessionId: null,
+        topicId: null,
+        kind: "text",
+      });
+      const [created] = await tx
+        .insert(files)
+        .values({
+          groupId: group.id,
+          sessionId: null,
+          topicId: null,
+          kind: "text",
+          number,
+          title: null,
+          storageKey: null,
+          mimeType: "text/plain",
+          sizeBytes: Buffer.byteLength(content, "utf8"),
+          textContent: content,
+          status: "ready",
+          uploadedBy: input.userId,
+        })
+        .returning();
+      if (!created) {
+        throw badRequest("FILE_CREATE_FAILED", "ساخت فایل متنی ناموفق بود");
+      }
+      return created;
+    });
+    return toFileDto(file, { includeText: true });
+  }
+
+  const sessionId = input.sessionId;
+  if (!sessionId) {
+    throw badRequest("TEXT_TARGET_REQUIRED", "جلسه یا کلاس لازم است");
+  }
+  const { session, topic } = await resolveSessionAndTopic(sessionId, input.topicId);
+
   const file = await db.transaction(async (tx) => {
     const number = await nextFileNumber(tx, {
+      groupId: session.groupId,
       sessionId: session.id,
       topicId: topic?.id ?? null,
       kind: "text",

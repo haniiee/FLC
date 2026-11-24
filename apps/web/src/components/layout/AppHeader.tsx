@@ -24,14 +24,14 @@ export function AppHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-hero-from text-white pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex max-w-[720px] items-center justify-between gap-3 px-4 py-3">
-        <Link href="/" className="flex items-center gap-2">
+        <Link href="/home" className="flex items-center gap-2">
           <img src={logoSrc} alt={`${copy.brand.short} logo`} width={36} height={36} />
           <span className="text-lg font-extrabold tracking-wide">{copy.brand.short}</span>
         </Link>
         {isAuthenticated ? (
           <div className="hidden items-center gap-1 md:flex">
             <Link
-              href="/"
+              href="/home"
               className="rounded-md px-3 py-1.5 text-sm font-semibold text-white/90 hover:bg-white/10"
             >
               {copy.nav.classes}

@@ -29,6 +29,8 @@ type PlayerState = {
   setFullPlayerOpen: (open: boolean) => void;
   setResumePrompt: (prompt: SavedPlayerSession | null) => void;
   stop: () => void;
+  /** Stop playback and hide the mini player. */
+  dismiss: () => void;
 };
 
 export const usePlayerStore = create<PlayerState>((set) => ({
@@ -78,6 +80,19 @@ export const usePlayerStore = create<PlayerState>((set) => ({
     set({
       isPlaying: false,
       position: 0,
+    }),
+
+  dismiss: () =>
+    set({
+      queue: [],
+      currentIndex: 0,
+      isPlaying: false,
+      position: 0,
+      duration: 0,
+      sourceSessionId: null,
+      fullPlayerOpen: false,
+      hasActiveQueue: false,
+      resumePrompt: null,
     }),
 }));
 

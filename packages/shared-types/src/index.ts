@@ -129,6 +129,8 @@ export {
   type CompleteFileBody,
   CreateTextFileBodySchema,
   type CreateTextFileBody,
+  GroupFilesResponseSchema,
+  type GroupFilesResponse,
   FileUrlResponseSchema,
   type FileUrlResponse,
   PlaylistItemSchema,

@@ -1,6 +1,6 @@
-import { Plus } from "lucide-react-native";
+import { Plus, Type } from "lucide-react-native";
 import { type ReactNode } from "react";
-import { I18nManager, View } from "react-native";
+import { I18nManager, Pressable, View } from "react-native";
 import { copy } from "../../lib/copy";
 import type { VoiceCapture } from "../../lib/upload-voice";
 import { useTheme } from "../../theme/theme";
@@ -9,6 +9,7 @@ import { RecordButton } from "./RecordButton";
 
 type ContentActionsRowProps = {
   onAddFile: () => void;
+  onSendText: () => void;
   onVoiceCaptured: (capture: VoiceCapture) => void;
   voiceDisabled?: boolean;
   /** Optional leading control (e.g. New topic) — rendered before Add file. */
@@ -22,6 +23,7 @@ type ContentActionsRowProps = {
  */
 export function ContentActionsRow({
   onAddFile,
+  onSendText,
   onVoiceCaptured,
   voiceDisabled,
   leading,
@@ -44,6 +46,23 @@ export function ContentActionsRow({
           onPress={onAddFile}
         />
       </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={copy.content.sendText}
+        onPress={onSendText}
+        style={{
+          width: 48,
+          height: 48,
+          borderRadius: 24,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.surface,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Type size={20} color={colors.primary} />
+      </Pressable>
       <RecordButton disabled={voiceDisabled} onCaptured={onVoiceCaptured} />
     </View>
   );

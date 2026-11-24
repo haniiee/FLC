@@ -7,7 +7,8 @@ import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ItemActionsMenu } from "../../../components/content/ItemActionsMenu";
-import { canManageContent } from "../../../components/files/FileRow";
+import { canManageContent, FileRow } from "../../../components/files/FileRow";
+import { TextNoteSheet } from "../../../components/files/TextNoteSheet";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
@@ -25,6 +26,7 @@ export default function GroupPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<"sessions" | "members">("sessions");
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [textOpen, setTextOpen] = useState(false);
   const [inviteUrl, setInviteUrl] = useState("");
   const [inviteCode, setInviteCode] = useState("");
 
@@ -41,6 +43,11 @@ export default function GroupPage() {
   const sessionsQuery = useQuery({
     queryKey: ["sessions", groupId],
     queryFn: () => getApiClient().listSessions(groupId),
+  });
+
+  const filesQuery = useQuery({
+    queryKey: ["group-files", groupId],
+    queryFn: () => getApiClient().listGroupFiles(groupId),
   });
 
   const membersQuery = useQuery({
@@ -90,7 +97,7 @@ export default function GroupPage() {
   return (
     <div className="space-y-4">
       <Hero>
-        <Link href="/" className="text-xs font-medium text-white/70 hover:text-white">
+        <Link href="/home" className="text-xs font-medium text-white/70 hover:text-white">
           ← {copy.common.back}
         </Link>
         <h1 className="mt-2 text-2xl font-extrabold" dir="auto">
@@ -122,6 +129,25 @@ export default function GroupPage() {
           </Link>
         ))}
       </div>
+
+      {(canManage || (filesQuery.data?.files.length ?? 0) > 0) && (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold text-secondary">{copy.content.classNotes}</h2>
+          {canManage ? (
+            <Button type="button" variant="outline" className="w-full" onClick={() => setTextOpen(true)}>
+              {copy.content.sendText}
+            </Button>
+          ) : null}
+          {(filesQuery.data?.files ?? []).map((file) => (
+            <FileRow
+              key={file.id}
+              file={file}
+              canManage={canManage}
+              onChanged={() => void filesQuery.refetch()}
+            />
+          ))}
+        </section>
+      )}
 
       <div className="flex gap-2 rounded-lg border border-border bg-surface p-1 shadow-card">
         {(
@@ -287,6 +313,21 @@ export default function GroupPage() {
           )}
         </div>
       ) : null}
+
+      <TextNoteSheet
+        open={textOpen}
+        onClose={() => setTextOpen(false)}
+        onSubmit={async (content) => {
+          try {
+            await getApiClient().createTextFile({ groupId, content });
+            toast.success(copy.content.textAdded);
+            await queryClient.invalidateQueries({ queryKey: ["group-files", groupId] });
+          } catch (error) {
+            toast.error(apiErrorMessage(error));
+            throw error;
+          }
+        }}
+      />
 
       <Sheet open={inviteOpen} onClose={() => setInviteOpen(false)} title={copy.group.invite}>
         <div className="space-y-3">

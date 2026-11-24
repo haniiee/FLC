@@ -521,6 +521,35 @@ export function PlayerProvider({ children }: PlayerProviderProps) {
     router.push("/player");
   }, []);
 
+  const dismiss = useCallback(() => {
+    const live = playlistRef.current;
+    expectingPlayback.current = false;
+    resumeAllowedFor.current = null;
+    pendingResumeFileId.current = null;
+    startAtSec.current = null;
+    commandedIndex.current = null;
+    rebuildingRef.current = true;
+    try {
+      live.pause();
+      while (live.trackCount > 0) {
+        live.remove(0);
+      }
+      live.setActiveForLockScreen(false);
+    } catch {
+      // Playlist may already be empty or inactive.
+    } finally {
+      rebuildingRef.current = false;
+    }
+    queueRef.current = [];
+    indexRef.current = 0;
+    positionRef.current = 0;
+    positionHold.current = null;
+    setQueue([]);
+    setIndex(0);
+    setIsPlaying(false);
+    progress.publish({ position: 0, duration: 0, isBuffering: false });
+  }, [progress]);
+
   const dismissToast = useCallback(() => setToast(null), []);
 
   useEffect(() => {
@@ -608,6 +637,7 @@ export function PlayerProvider({ children }: PlayerProviderProps) {
       cycleRepeat,
       cycleSpeed,
       openFullPlayer,
+      dismiss,
       dismissToast,
       isRecordingOverlay,
       setRecordingOverlay,
@@ -633,6 +663,7 @@ export function PlayerProvider({ children }: PlayerProviderProps) {
       cycleRepeat,
       cycleSpeed,
       openFullPlayer,
+      dismiss,
       dismissToast,
       isRecordingOverlay,
     ],

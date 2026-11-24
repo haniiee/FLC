@@ -671,4 +671,89 @@ describe("sessions topics files", () => {
     expect(listed.some((file) => file.id === orphan.body.file.id)).toBe(false);
     expect(listed.map((file) => file.number).sort((a, b) => a - b)).toEqual([1, 2, 3]);
   });
+
+  it("lets a teacher send text on the class, session, and topic", async () => {
+    const teacher = await teacherAuth(app, "09123000077");
+    const group = await createGroup(app, teacher.accessToken);
+    const sessionRes = await app.inject({
+      method: "POST",
+      url: `/groups/${group.id}/sessions`,
+      headers: authHeader(teacher.accessToken),
+      payload: {},
+    });
+    expect(sessionRes.statusCode).toBe(200);
+    const session = sessionRes.json() as { id: string };
+    const topicRes = await app.inject({
+      method: "POST",
+      url: `/sessions/${session.id}/topics`,
+      headers: authHeader(teacher.accessToken),
+      payload: {},
+    });
+    expect(topicRes.statusCode).toBe(200);
+    const topic = topicRes.json() as { id: string };
+
+    const classText = await app.inject({
+      method: "POST",
+      url: "/files/text",
+      headers: authHeader(teacher.accessToken),
+      payload: { groupId: group.id, content: "Class note" },
+    });
+    expect(classText.statusCode).toBe(200);
+    expect(classText.json()).toMatchObject({
+      kind: "text",
+      sessionId: null,
+      topicId: null,
+      displayName: "Text 1",
+      textContent: "Class note",
+    });
+
+    const sessionText = await app.inject({
+      method: "POST",
+      url: "/files/text",
+      headers: authHeader(teacher.accessToken),
+      payload: { sessionId: session.id, content: "Session note" },
+    });
+    expect(sessionText.statusCode).toBe(200);
+    expect(sessionText.json().displayName).toBe("Text 1");
+
+    const topicText = await app.inject({
+      method: "POST",
+      url: "/files/text",
+      headers: authHeader(teacher.accessToken),
+      payload: { sessionId: session.id, topicId: topic.id, content: "Topic note" },
+    });
+    expect(topicText.statusCode).toBe(200);
+    expect(topicText.json().displayName).toBe("Text 1");
+
+    const listed = await app.inject({
+      method: "GET",
+      url: `/groups/${group.id}/files`,
+      headers: authHeader(teacher.accessToken),
+    });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json().files).toHaveLength(1);
+    expect(listed.json().files[0].textContent).toBe("Class note");
+
+    const sessionDetail = await app.inject({
+      method: "GET",
+      url: `/sessions/${session.id}`,
+      headers: authHeader(teacher.accessToken),
+    });
+    const sessionFiles = sessionDetail.json().files as Array<{ textContent?: string }>;
+    expect(sessionFiles.some((file) => file.textContent === "Session note")).toBe(true);
+    expect(sessionFiles.some((file) => file.textContent === "Class note")).toBe(false);
+
+    const student = await register(app, {
+      phone: "09123000078",
+      password: "password1",
+      displayName: "Student",
+    });
+    const denied = await app.inject({
+      method: "POST",
+      url: "/files/text",
+      headers: authHeader(student.body.accessToken),
+      payload: { groupId: group.id, content: "nope" },
+    });
+    expect(denied.statusCode).toBe(403);
+  });
 });

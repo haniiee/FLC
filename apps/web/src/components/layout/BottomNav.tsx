@@ -21,10 +21,10 @@ export function BottomNav() {
 
   const tabs = [
     {
-      href: "/",
+      href: "/home",
       label: copy.nav.classes,
       match: (p: string) =>
-        p === "/" ||
+        p === "/home" ||
         p.startsWith("/groups") ||
         p.startsWith("/sessions") ||
         p.startsWith("/topics"),

@@ -31,6 +31,8 @@ export type PlayerApi = PlayerState & {
   cycleRepeat: () => void;
   cycleSpeed: () => void;
   openFullPlayer: () => void;
+  /** Stop audio, clear the queue, and hide the mini player. */
+  dismiss: () => void;
   dismissToast: () => void;
   /** True while the hold-to-record overlay is visible — MiniPlayer hides. */
   isRecordingOverlay: boolean;

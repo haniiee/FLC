@@ -7,6 +7,7 @@ import {
   CreateTopicBodySchema,
   FileSchema,
   FileUrlResponseSchema,
+  GroupFilesResponseSchema,
   OkResponseSchema,
   PlaylistResponseSchema,
   SessionDetailSchema,
@@ -33,6 +34,7 @@ import {
   getFileOrThrow,
   getPlaylist,
   getSessionDetail,
+  listGroupFiles,
   getSessionOrThrow,
   getTopicDetail,
   getTopicOrThrow,
@@ -266,6 +268,24 @@ export const contentRoutes: FastifyPluginAsync = async (rawApp) => {
     },
   );
 
+  app.get(
+    "/groups/:groupId/files",
+    {
+      schema: {
+        params: GroupParams,
+        response: { 200: GroupFilesResponseSchema },
+      },
+    },
+    async (request) => {
+      const role = await requireGroupRole(app, request, request.params.groupId, [
+        "teacher",
+        "assistant",
+        "student",
+      ]);
+      return { files: await listGroupFiles(request.params.groupId, role) };
+    },
+  );
+
   app.post(
     "/files/text",
     {
@@ -275,6 +295,14 @@ export const contentRoutes: FastifyPluginAsync = async (rawApp) => {
       },
     },
     async (request) => {
+      if ("groupId" in request.body) {
+        await requireGroupRole(app, request, request.body.groupId, ["teacher", "assistant"]);
+        return createTextFile({
+          userId: request.user.sub,
+          groupId: request.body.groupId,
+          content: request.body.content,
+        });
+      }
       const session = await getSessionOrThrow(request.body.sessionId);
       await requireGroupRole(app, request, session.groupId, ["teacher", "assistant"]);
       return createTextFile({

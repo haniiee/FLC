@@ -1,8 +1,9 @@
-import { Pause, Play, SkipForward } from "lucide-react-native";
+import { Pause, Play, SkipForward, X } from "lucide-react-native";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSegments } from "expo-router";
 import { AppText } from "../components/AppText";
+import { copy } from "../lib/copy";
 import { useTheme } from "../theme/theme";
 import { usePlayerOptional, usePlayerProgress } from "./context";
 import { MINI_PLAYER_HEIGHT } from "./types";
@@ -106,6 +107,20 @@ export function MiniPlayer() {
           }}
         >
           <SkipForward size={22} color={colors.text} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={copy.a11y.closePlayer}
+          hitSlop={8}
+          onPress={player.dismiss}
+          style={{
+            width: 36,
+            height: 36,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <X size={20} color={colors.textMuted} />
         </Pressable>
       </View>
     </View>

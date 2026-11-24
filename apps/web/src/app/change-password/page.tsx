@@ -36,7 +36,7 @@ export default function ChangePasswordPage() {
       await getApiClient().changePassword({ currentPassword, newPassword });
       await refreshUser();
       toast.success(copy.auth.passwordUpdated);
-      router.replace(user?.platformRole === "admin" ? "/admin/groups" : "/");
+      router.replace(user?.platformRole === "admin" ? "/admin/groups" : "/home");
     } catch (error) {
       toast.error(apiErrorMessage(error, copy.auth.changePasswordFailed));
     } finally {

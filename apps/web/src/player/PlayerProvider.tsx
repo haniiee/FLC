@@ -401,7 +401,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const play = useCallback(() => {
     const audio = audioRef.current;
-    if (!audio) {
+    if (!audio || !usePlayerStore.getState().queue.length) {
       return;
     }
     void audio.play().then(
@@ -536,6 +536,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       jumpTo,
       openFullPlayer: () => usePlayerStore.getState().setFullPlayerOpen(true),
       closeFullPlayer: () => usePlayerStore.getState().setFullPlayerOpen(false),
+      dismiss: () => {
+        usePlayerStore.getState().dismiss();
+        const audio = audioRef.current;
+        if (audio) {
+          audio.pause();
+          audio.removeAttribute("src");
+          audio.load();
+        }
+        clearSavedSession();
+        if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
+          navigator.mediaSession.metadata = null;
+          navigator.mediaSession.playbackState = "none";
+        }
+      },
       resumeSaved,
       dismissResume,
       isCurrentFile: (fileId) => selectCurrentItem(usePlayerStore.getState())?.fileId === fileId,
