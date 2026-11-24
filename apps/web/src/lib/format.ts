@@ -1,13 +1,14 @@
 import type { FileKind, GroupRole } from "@app/shared-types";
+import { copy } from "./copy";
 
 export function roleLabel(role: GroupRole): string {
   switch (role) {
     case "teacher":
-      return "استاد";
+      return copy.classes.roleTeacher;
     case "assistant":
-      return "دستیار";
+      return copy.classes.roleAssistant;
     case "student":
-      return "شاگرد";
+      return copy.classes.roleStudent;
   }
 }
 
@@ -34,19 +35,24 @@ export function formatDuration(ms: number | null | undefined): string {
 export function kindLabel(kind: FileKind): string {
   switch (kind) {
     case "audio":
-      return "صوت";
+      return "Audio";
     case "pdf":
       return "PDF";
     case "image":
-      return "تصویر";
+      return "Image";
     case "video":
-      return "ویدیو";
+      return "Video";
     case "text":
-      return "متن";
+      return "Text";
   }
 }
 
-export function apiErrorMessage(error: unknown, fallback = "خطایی رخ داد"): string {
+export function firstName(displayName: string): string {
+  const part = displayName.trim().split(/\s+/)[0];
+  return part || displayName;
+}
+
+export function apiErrorMessage(error: unknown, fallback: string = copy.common.error): string {
   if (
     error &&
     typeof error === "object" &&

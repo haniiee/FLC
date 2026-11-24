@@ -25,17 +25,16 @@ describe("day groups", () => {
   const now = new Date(2026, 10, 16, 15, 0, 0); // 16 Nov 2026 local
 
   it("labels today and yesterday", () => {
-    expect(formatDayLabel(new Date(2026, 10, 16, 10).toISOString(), now)).toBe("امروز");
-    expect(formatDayLabel(new Date(2026, 10, 15, 10).toISOString(), now)).toBe("دیروز");
+    expect(formatDayLabel(new Date(2026, 10, 16, 10).toISOString(), now)).toBe("Today");
+    expect(formatDayLabel(new Date(2026, 10, 15, 10).toISOString(), now)).toBe("Yesterday");
   });
 
-  it("uses Persian calendar date for older days", () => {
+  it("uses calendar date for older days", () => {
     const label = formatDayLabel(new Date(2026, 10, 13, 10).toISOString(), now);
-    expect(label).not.toBe("امروز");
-    expect(label).not.toBe("دیروز");
+    expect(label).not.toBe("Today");
+    expect(label).not.toBe("Yesterday");
     expect(label.length).toBeGreaterThan(3);
-    // fa-IR-u-ca-persian typically includes day + month name
-    expect(label).toMatch(/[0-9۰-۹]/);
+    expect(label).toMatch(/[0-9]/);
   });
 
   it("groups consecutive messages by local day", () => {
@@ -46,9 +45,9 @@ describe("day groups", () => {
     ];
     const groups = groupMessagesByDay(messages, now);
     expect(groups).toHaveLength(2);
-    expect(groups[0]!.label).toBe("دیروز");
+    expect(groups[0]!.label).toBe("Yesterday");
     expect(groups[0]!.messages).toHaveLength(2);
-    expect(groups[1]!.label).toBe("امروز");
+    expect(groups[1]!.label).toBe("Today");
     expect(groups[1]!.messages).toHaveLength(1);
   });
 });

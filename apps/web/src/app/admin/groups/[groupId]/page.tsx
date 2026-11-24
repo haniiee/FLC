@@ -8,7 +8,6 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { InitialPasswordModal } from "../../../../components/admin/InitialPasswordModal";
 import { Button } from "../../../../components/ui/Button";
-import { Card } from "../../../../components/ui/Card";
 import { Input } from "../../../../components/ui/Input";
 import { Modal } from "../../../../components/ui/Modal";
 import { Spinner } from "../../../../components/ui/Spinner";
@@ -18,16 +17,25 @@ import { apiErrorMessage } from "../../../../lib/format";
 function roleBadge(role: AdminMember["role"]) {
   const styles =
     role === "teacher"
-      ? "bg-secondary text-white"
+      ? "bg-primary text-white"
       : role === "assistant"
-        ? "bg-primary/15 text-primary"
-        : "bg-surface text-text-muted border border-border";
+        ? "bg-secondary/12 text-secondary"
+        : "bg-surface-muted text-text-muted ring-1 ring-border";
   const label = role === "teacher" ? "Teacher" : role === "assistant" ? "Assistant" : "Student";
   return (
-    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${styles}`}>
+    <span
+      className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${styles}`}
+    >
       {label}
     </span>
   );
+}
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
 }
 
 export default function AdminGroupDetailPage() {
@@ -218,7 +226,7 @@ export default function AdminGroupDetailPage() {
 
   if (groupsQuery.isLoading || membersQuery.isLoading) {
     return (
-      <div className="flex min-h-[30vh] items-center justify-center">
+      <div className="flex min-h-[36vh] items-center justify-center">
         <Spinner className="h-8 w-8" />
       </div>
     );
@@ -226,12 +234,15 @@ export default function AdminGroupDetailPage() {
 
   if (!group) {
     return (
-      <Card className="space-y-3">
-        <h2 className="text-lg font-semibold text-secondary">Class not found</h2>
-        <Link href="/admin/groups" className="text-sm text-secondary underline">
+      <div className="rounded-2xl border border-primary/8 bg-white p-8 text-center shadow-[0_18px_50px_-36px_rgba(15,30,74,0.5)]">
+        <h2 className="text-lg font-bold text-primary">Class not found</h2>
+        <Link
+          href="/admin/groups"
+          className="mt-3 inline-block text-sm font-semibold text-secondary underline-offset-2 hover:underline"
+        >
           Back to classes
         </Link>
-      </Card>
+      </div>
     );
   }
 
@@ -246,85 +257,124 @@ export default function AdminGroupDetailPage() {
       <div>
         <Link
           href="/admin/groups"
-          className="text-sm text-secondary underline-offset-2 hover:underline"
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-secondary transition hover:text-primary"
         >
-          ← Classes
+          <span aria-hidden>←</span> Classes
         </Link>
-        <div className="mt-3 flex flex-wrap items-start gap-3">
-          {editingName ? (
-            <div className="flex min-w-[240px] flex-1 flex-wrap items-end gap-2">
-              <div className="min-w-[200px] flex-1">
-                <Input
-                  label="Class name"
-                  value={nameDraft}
-                  onChange={(event) => setNameDraft(event.target.value)}
-                />
+
+        <div className="mt-4 overflow-hidden rounded-2xl border border-primary/8 bg-white shadow-[0_18px_50px_-36px_rgba(15,30,74,0.5)]">
+          <div className="bg-hero-navy px-5 py-6 text-white sm:px-6">
+            {editingName ? (
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="min-w-[220px] flex-1 space-y-1.5">
+                  <span className="text-xs font-semibold uppercase tracking-[0.14em] text-white/55">
+                    Class name
+                  </span>
+                  <input
+                    value={nameDraft}
+                    onChange={(event) => setNameDraft(event.target.value)}
+                    className="w-full rounded-md border border-white/20 bg-white px-3 py-2.5 text-sm text-text outline-none focus:border-secondary-light focus:ring-2 focus:ring-secondary-light/30"
+                  />
+                </label>
+                <Button type="button" disabled={savingName} onClick={() => void saveName()}>
+                  {savingName ? "Saving…" : "Save"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-white hover:bg-white/10"
+                  onClick={() => setEditingName(false)}
+                >
+                  Cancel
+                </Button>
               </div>
-              <Button type="button" disabled={savingName} onClick={() => void saveName()}>
-                {savingName ? "Saving…" : "Save"}
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setEditingName(false)}>
-                Cancel
-              </Button>
+            ) : (
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/45">
+                    Class
+                  </p>
+                  <h2 className="mt-1 text-2xl font-extrabold tracking-tight" dir="auto">
+                    {group.name}
+                  </h2>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="px-3 py-1.5 text-xs text-white/85 hover:bg-white/10 hover:text-white"
+                  onClick={() => setEditingName(true)}
+                >
+                  Rename
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/70 px-5 py-4 sm:px-6">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-hero-navy text-xs font-bold text-white">
+                {initials(group.teacher.displayName)}
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
+                  Teacher
+                </p>
+                <p className="truncate font-semibold text-text" dir="auto">
+                  {group.teacher.displayName}
+                </p>
+                <p className="text-sm text-text-muted" dir="ltr">
+                  {group.teacher.phone}
+                </p>
+              </div>
             </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-bold text-secondary">{group.name}</h2>
-              <Button
-                type="button"
-                variant="ghost"
-                className="px-2 py-1 text-xs"
-                onClick={() => setEditingName(true)}
-              >
-                Rename
-              </Button>
-            </div>
-          )}
+            <Button type="button" variant="outline" onClick={() => setChangeTeacherOpen(true)}>
+              Change teacher
+            </Button>
+          </div>
         </div>
       </div>
 
-      <Card className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="font-semibold text-text">Teacher</h3>
-            <p className="mt-1 text-sm text-text-muted">
-              {group.teacher.displayName} · <span dir="ltr">{group.teacher.phone}</span>
-            </p>
-          </div>
-          <Button type="button" variant="secondary" onClick={() => setChangeTeacherOpen(true)}>
-            Change teacher
-          </Button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-bold tracking-tight text-primary">Members</h3>
+          <p className="text-sm text-text-muted">
+            {members.length} {members.length === 1 ? "person" : "people"} in this class
+          </p>
         </div>
-      </Card>
+        <Button type="button" onClick={() => setAddOpen(true)}>
+          Add member
+        </Button>
+      </div>
 
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="font-semibold text-text">Members</h3>
-          <Button type="button" onClick={() => setAddOpen(true)}>
-            Add member
-          </Button>
-        </div>
-        <div className="space-y-2">
+      <div className="overflow-hidden rounded-2xl border border-primary/8 bg-white shadow-[0_18px_50px_-36px_rgba(15,30,74,0.5)]">
+        <ul className="divide-y divide-border/70">
           {members.map((member) => (
-            <Card
+            <li
               key={member.id}
-              className="flex flex-wrap items-center justify-between gap-3 py-3"
+              className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"
             >
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-text">{member.displayName}</span>
-                  {roleBadge(member.role)}
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-xs font-bold text-primary">
+                  {initials(member.displayName)}
+                </span>
+                <div className="min-w-0 space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-text" dir="auto">
+                      {member.displayName}
+                    </span>
+                    {roleBadge(member.role)}
+                  </div>
+                  <p className="text-sm text-text-muted" dir="ltr">
+                    {member.phone}
+                  </p>
                 </div>
-                <p className="text-sm text-text-muted" dir="ltr">
-                  {member.phone}
-                </p>
               </div>
               {member.role !== "teacher" ? (
                 <div className="flex flex-wrap gap-2">
                   <Button
                     type="button"
                     variant="ghost"
-                    className="px-2 py-1 text-xs"
+                    className="px-2.5 py-1.5 text-xs"
                     onClick={() => void toggleRole(member)}
                   >
                     Make {member.role === "assistant" ? "Student" : "Assistant"}
@@ -332,16 +382,16 @@ export default function AdminGroupDetailPage() {
                   <Button
                     type="button"
                     variant="danger"
-                    className="px-2 py-1 text-xs"
+                    className="px-2.5 py-1.5 text-xs"
                     onClick={() => void removeMember(member)}
                   >
                     Remove
                   </Button>
                 </div>
               ) : null}
-            </Card>
+            </li>
           ))}
-        </div>
+        </ul>
       </div>
 
       <Modal
@@ -358,23 +408,23 @@ export default function AdminGroupDetailPage() {
             onChange={(event) => setTeacherQuery(event.target.value)}
           />
           {selectedTeacher ? (
-            <div className="rounded-lg border border-secondary/30 bg-surface px-3 py-2 text-sm">
-              Selected: <strong>{selectedTeacher.displayName}</strong>{" "}
+            <div className="rounded-xl border border-secondary/25 bg-primary-soft/50 px-3 py-2.5 text-sm">
+              Selected: <strong dir="auto">{selectedTeacher.displayName}</strong>{" "}
               <span className="text-text-muted" dir="ltr">
                 ({selectedTeacher.phone})
               </span>
             </div>
           ) : (
-            <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
+            <div className="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-border p-2">
               {(teacherPickQuery.data?.items ?? []).map((user) => (
                 <button
                   key={user.id}
                   type="button"
-                  className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm hover:bg-surface"
+                  className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm hover:bg-primary-soft"
                   onClick={() => setSelectedTeacher(user)}
                 >
                   <span>
-                    {user.displayName}
+                    <span dir="auto">{user.displayName}</span>
                     <span className="ml-2 text-text-muted" dir="ltr">
                       {user.phone}
                     </span>
@@ -427,8 +477,10 @@ export default function AdminGroupDetailPage() {
               <button
                 key={id}
                 type="button"
-                className={`rounded-full px-3 py-1.5 text-sm font-medium ${
-                  addTab === id ? "bg-secondary text-white" : "bg-surface text-text-muted"
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+                  addTab === id
+                    ? "bg-primary text-white"
+                    : "bg-primary-soft text-text-muted hover:text-text"
                 }`}
                 onClick={() => setAddTab(id)}
               >
@@ -447,8 +499,10 @@ export default function AdminGroupDetailPage() {
               <button
                 key={id}
                 type="button"
-                className={`rounded-full px-3 py-1.5 text-sm font-medium ${
-                  memberRole === id ? "bg-primary text-on-primary" : "bg-surface text-text-muted"
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+                  memberRole === id
+                    ? "bg-secondary text-white"
+                    : "bg-primary-soft text-text-muted hover:text-text"
                 }`}
                 onClick={() => setMemberRole(id)}
               >
@@ -466,23 +520,23 @@ export default function AdminGroupDetailPage() {
                 onChange={(event) => setUserQuery(event.target.value)}
               />
               {selectedUser ? (
-                <div className="rounded-lg border border-secondary/30 bg-surface px-3 py-2 text-sm">
-                  Selected: <strong>{selectedUser.displayName}</strong>{" "}
+                <div className="rounded-xl border border-secondary/25 bg-primary-soft/50 px-3 py-2.5 text-sm">
+                  Selected: <strong dir="auto">{selectedUser.displayName}</strong>{" "}
                   <span className="text-text-muted" dir="ltr">
                     ({selectedUser.phone})
                   </span>
                 </div>
               ) : (
-                <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
+                <div className="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-border p-2">
                   {(userPickQuery.data?.items ?? []).map((user) => (
                     <button
                       key={user.id}
                       type="button"
-                      className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm hover:bg-surface"
+                      className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm hover:bg-primary-soft"
                       onClick={() => setSelectedUser(user)}
                     >
                       <span>
-                        {user.displayName}
+                        <span dir="auto">{user.displayName}</span>
                         <span className="ml-2 text-text-muted" dir="ltr">
                           {user.phone}
                         </span>

@@ -5,7 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
+import { Hero } from "../../../components/ui/Hero";
 import { Spinner } from "../../../components/ui/Spinner";
+import { copy } from "../../../lib/copy";
 import { getApiClient } from "../../../lib/api";
 import { apiErrorMessage } from "../../../lib/format";
 import { useAuth } from "../../../providers/auth-provider";
@@ -24,10 +26,10 @@ export default function JoinPage() {
   const joinMutation = useMutation({
     mutationFn: () => getApiClient().joinInvite(code),
     onSuccess: (result) => {
-      toast.success(result.alreadyMember ? "قبلاً عضو این کلاس بودید" : "عضویت انجام شد");
+      toast.success(result.alreadyMember ? copy.join.alreadyMember : copy.join.joined);
       router.replace(`/groups/${result.groupId}`);
     },
-    onError: (error) => toast.error(apiErrorMessage(error, "عضویت ناموفق بود")),
+    onError: (error) => toast.error(apiErrorMessage(error, copy.join.joinFailed)),
   });
 
   if (inviteQuery.isLoading) {
@@ -40,9 +42,9 @@ export default function JoinPage() {
 
   if (inviteQuery.isError || !inviteQuery.data) {
     return (
-      <Card>
-        <h1 className="text-lg font-bold text-danger">کد دعوت نامعتبر</h1>
-        <p className="mt-2 text-sm text-text-muted">این لینک یا کد وجود ندارد یا منقضی شده است.</p>
+      <Card className="space-y-2">
+        <h1 className="text-lg font-bold text-danger">{copy.join.invalidInviteTitle}</h1>
+        <p className="text-sm text-text-muted">{copy.join.invalidInviteBody}</p>
       </Card>
     );
   }
@@ -50,38 +52,49 @@ export default function JoinPage() {
   const invite = inviteQuery.data;
 
   return (
-    <Card className="space-y-4">
-      <div>
-        <p className="text-sm text-text-muted">دعوت به کلاس</p>
-        <h1 className="mt-1 text-xl font-bold text-secondary">{invite.groupName}</h1>
-        <p className="mt-2 text-sm text-text">استاد: {invite.teacherName}</p>
+    <div className="space-y-4">
+      <Hero>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
+          {copy.join.invitedTo}
+        </p>
+        <h1 className="mt-2 text-2xl font-extrabold" dir="auto">
+          {invite.groupName}
+        </h1>
+        <p className="mt-2 text-sm text-white/80" dir="auto">
+          {copy.join.teacher(invite.teacherName)}
+        </p>
+      </Hero>
+
+      <Card className="space-y-4">
         {!invite.valid ? (
-          <p className="mt-3 rounded-md bg-primary-soft px-3 py-2 text-sm text-secondary">
-            این دعوت‌نامه دیگر معتبر نیست.
+          <p className="rounded-md bg-warning/15 px-3 py-2 text-sm text-text">
+            {copy.join.noLongerValid}
           </p>
         ) : null}
-      </div>
 
-      {invite.valid ? (
-        isAuthenticated ? (
-          <Button
-            className="w-full"
-            disabled={joinMutation.isPending}
-            onClick={() => joinMutation.mutate()}
-          >
-            {joinMutation.isPending ? "در حال عضویت..." : "عضویت در کلاس"}
-          </Button>
-        ) : (
-          <Button
-            className="w-full"
-            onClick={() =>
-              router.push(`/login?next=${encodeURIComponent(`/join/${encodeURIComponent(code)}`)}`)
-            }
-          >
-            ورود و عضویت
-          </Button>
-        )
-      ) : null}
-    </Card>
+        {invite.valid ? (
+          isAuthenticated ? (
+            <Button
+              className="w-full"
+              disabled={joinMutation.isPending}
+              onClick={() => joinMutation.mutate()}
+            >
+              {joinMutation.isPending ? copy.join.joining : copy.join.joinClassCta}
+            </Button>
+          ) : (
+            <Button
+              className="w-full"
+              onClick={() =>
+                router.push(
+                  `/login?next=${encodeURIComponent(`/join/${encodeURIComponent(code)}`)}`,
+                )
+              }
+            >
+              {copy.join.signInAndJoin}
+            </Button>
+          )
+        ) : null}
+      </Card>
+    </div>
   );
 }

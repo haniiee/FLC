@@ -4,10 +4,11 @@ import type { AdminUser } from "@app/shared-types";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { AdminPageHeader } from "../../../components/admin/AdminPageHeader";
+import { AdminToolbar } from "../../../components/admin/AdminToolbar";
 import { Button } from "../../../components/ui/Button";
-import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { Input } from "../../../components/ui/Input";
 import { Modal } from "../../../components/ui/Modal";
@@ -73,49 +74,122 @@ export default function AdminGroupsPage() {
   }
 
   const items = groupsQuery.data?.items ?? [];
+  const totals = useMemo(() => {
+    return items.reduce(
+      (acc, group) => {
+        acc.classes += 1;
+        acc.assistants += group.assistantCount;
+        acc.students += group.studentCount;
+        return acc;
+      },
+      { classes: 0, assistants: 0, students: 0 },
+    );
+  }, [items]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="min-w-[220px] flex-1">
+    <div>
+      <AdminPageHeader
+        title="Classes"
+        description="Create cohorts, assign teachers, and open a class to manage members."
+        actions={
+          <Button type="button" onClick={() => setCreateOpen(true)}>
+            Create class
+          </Button>
+        }
+      />
+
+      {!groupsQuery.isLoading && items.length > 0 ? (
+        <div className="mb-5 grid grid-cols-3 gap-3">
+          {[
+            { label: "Classes", value: totals.classes },
+            { label: "Assistants", value: totals.assistants },
+            { label: "Students", value: totals.students },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              className="rounded-2xl border border-primary/8 bg-white/90 px-4 py-3 shadow-[0_12px_36px_-28px_rgba(15,30,74,0.5)]"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
+                {stat.label}
+              </p>
+              <p className="mt-1 text-2xl font-extrabold tracking-tight text-primary">
+                {stat.value}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <AdminToolbar
+        search={
           <Input
             placeholder="Search classes…"
             value={q}
             onChange={(event) => setQ(event.target.value)}
           />
-        </div>
-        <Button type="button" onClick={() => setCreateOpen(true)}>
-          Create class
-        </Button>
-      </div>
+        }
+      />
 
       {groupsQuery.isLoading ? (
-        <div className="flex min-h-[30vh] items-center justify-center">
+        <div className="flex min-h-[36vh] items-center justify-center">
           <Spinner className="h-8 w-8" />
         </div>
       ) : items.length === 0 ? (
         <EmptyState title="No classes found" description="Create a class and assign a teacher." />
       ) : (
-        <div className="space-y-3">
-          {items.map((group) => (
-            <Link key={group.id} href={`/admin/groups/${group.id}`} className="block">
-              <Card className="transition hover:border-secondary/40">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h2 className="font-semibold text-text">{group.name}</h2>
-                    <p className="mt-1 text-sm text-text-muted">
-                      Teacher: {group.teacher.displayName} ·{" "}
-                      <span dir="ltr">{group.teacher.phone}</span>
-                    </p>
-                    <p className="mt-1 text-xs text-text-muted">
-                      {group.assistantCount} assistants · {group.studentCount} students
-                    </p>
-                  </div>
-                  <span className="text-secondary">→</span>
-                </div>
-              </Card>
-            </Link>
-          ))}
+        <div className="overflow-hidden rounded-2xl border border-primary/8 bg-white shadow-[0_18px_50px_-36px_rgba(15,30,74,0.5)]">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+              <thead>
+                <tr className="border-b border-border/70 bg-primary-soft/40 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
+                  <th className="px-5 py-2.5 font-semibold">Class</th>
+                  <th className="px-5 py-2.5 font-semibold">Teacher</th>
+                  <th className="px-5 py-2.5 font-semibold">Phone</th>
+                  <th className="px-5 py-2.5 text-right font-semibold">Assistants</th>
+                  <th className="px-5 py-2.5 text-right font-semibold">Students</th>
+                  <th className="px-5 py-2.5 font-semibold">
+                    <span className="sr-only">Open</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/70">
+                {items.map((group) => (
+                  <tr key={group.id} className="transition hover:bg-primary-soft/25">
+                    <td className="px-5 py-3.5">
+                      <Link
+                        href={`/admin/groups/${group.id}`}
+                        className="font-semibold text-primary hover:text-secondary"
+                        dir="auto"
+                      >
+                        {group.name}
+                      </Link>
+                    </td>
+                    <td className="px-5 py-3.5 font-medium text-text" dir="auto">
+                      {group.teacher.displayName}
+                    </td>
+                    <td className="px-5 py-3.5 text-text-muted" dir="ltr">
+                      {group.teacher.phone}
+                    </td>
+                    <td className="px-5 py-3.5 text-right tabular-nums text-text">
+                      {group.assistantCount}
+                    </td>
+                    <td className="px-5 py-3.5 text-right tabular-nums text-text">
+                      {group.studentCount}
+                    </td>
+                    <td className="px-5 py-3.5 text-right">
+                      <Link
+                        href={`/admin/groups/${group.id}`}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary-soft text-sm font-bold text-secondary transition hover:bg-secondary hover:text-white"
+                        aria-label={`Open ${group.name}`}
+                      >
+                        →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -134,21 +208,21 @@ export default function AdminGroupsPage() {
             onChange={(event) => setTeacherQuery(event.target.value)}
           />
           {selectedTeacher ? (
-            <div className="rounded-lg border border-secondary/30 bg-surface px-3 py-2 text-sm">
-              Selected: <strong>{selectedTeacher.displayName}</strong>{" "}
+            <div className="rounded-xl border border-secondary/25 bg-primary-soft/50 px-3 py-2.5 text-sm">
+              Selected: <strong dir="auto">{selectedTeacher.displayName}</strong>{" "}
               <span className="text-text-muted" dir="ltr">
                 ({selectedTeacher.phone})
               </span>
               <button
                 type="button"
-                className="ml-2 text-xs text-secondary underline"
+                className="ml-2 text-xs font-semibold text-secondary underline"
                 onClick={() => setSelectedTeacher(null)}
               >
                 Clear
               </button>
             </div>
           ) : (
-            <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
+            <div className="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-border p-2">
               {teachersQuery.isLoading ? (
                 <p className="p-2 text-sm text-text-muted">Searching…</p>
               ) : (teachersQuery.data?.items ?? []).length === 0 ? (
@@ -158,16 +232,18 @@ export default function AdminGroupsPage() {
                   <button
                     key={user.id}
                     type="button"
-                    className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm hover:bg-surface"
+                    className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition hover:bg-primary-soft"
                     onClick={() => setSelectedTeacher(user)}
                   >
                     <span>
-                      {user.displayName}
+                      <span dir="auto">{user.displayName}</span>
                       <span className="ml-2 text-text-muted" dir="ltr">
                         {user.phone}
                       </span>
                     </span>
-                    <span className="text-xs uppercase text-text-muted">{user.platformRole}</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+                      {user.platformRole}
+                    </span>
                   </button>
                 ))
               )}

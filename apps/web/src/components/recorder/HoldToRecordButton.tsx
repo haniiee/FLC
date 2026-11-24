@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { copy } from "../../lib/copy";
 import { usePlayerStore } from "../../player/store";
 import { useRecorder, type RecorderResult } from "../../recorder/useRecorder";
 
@@ -35,12 +36,12 @@ export function HoldToRecordButton({
 
   const recording = recorder.gesture.ui === "recording" || recorder.gesture.ui === "cancel-armed";
   const cancelArmed = recorder.gesture.ui === "cancel-armed";
-  const bottomClass = hasMiniPlayer ? "bottom-24" : "bottom-6";
+  const bottomClass = hasMiniPlayer ? "bottom-40 md:bottom-24" : "bottom-24 md:bottom-6";
 
   const button = (
     <button
       type="button"
-      aria-label="ضبط صوت"
+      aria-label={copy.recorder.recordVoice}
       className={`flex h-14 w-14 items-center justify-center rounded-full text-2xl text-on-primary shadow-lg select-none ${
         cancelArmed ? "bg-danger" : "bg-primary"
       } ${fixed ? `fixed end-4 z-40 ${bottomClass}` : ""} ${className}`}
@@ -109,7 +110,7 @@ export function HoldToRecordButton({
             {formatTimer(recorder.gesture.elapsedMs)}
           </bdi>
           <p className={`flex-1 text-sm ${cancelArmed ? "text-danger" : "text-secondary"}`}>
-            {cancelArmed ? "رها کن برای لغو" : recorder.cancelHintText}
+            {cancelArmed ? copy.recorder.releaseToCancel : recorder.cancelHintText}
           </p>
         </div>
       ) : null}

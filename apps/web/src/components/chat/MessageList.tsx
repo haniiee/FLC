@@ -8,6 +8,7 @@ import {
   type ClientChatMessage,
 } from "../../chat/cache";
 import { groupMessagesByDay } from "../../chat/day-groups";
+import { copy } from "../../lib/copy";
 import { MessageBubble } from "./MessageBubble";
 
 const NEAR_BOTTOM_PX = 120;
@@ -108,19 +109,19 @@ export function MessageList({
   };
 
   return (
-    <div className="relative min-h-0 flex-1">
+    <div className="relative min-h-0 flex-1 bg-background">
       <div
         ref={scrollerRef}
         onScroll={onScroll}
         className="h-full space-y-3 overflow-y-auto px-3 py-3"
       >
         {isFetchingNextPage ? (
-          <p className="text-center text-xs text-text-muted">بارگذاری پیام‌های قبلی…</p>
+          <p className="text-center text-xs text-text-muted">{copy.chat.loadOlder}</p>
         ) : null}
         {groups.map((group) => (
           <div key={group.key} className="space-y-2">
             <div className="sticky top-0 z-10 flex justify-center">
-              <span className="rounded-full bg-surface/95 px-3 py-0.5 text-[11px] text-text-muted shadow-sm">
+              <span className="rounded-full border border-border bg-surface/95 px-3 py-0.5 text-[11px] font-medium text-text-muted shadow-card">
                 {group.label}
               </span>
             </div>
@@ -147,14 +148,14 @@ export function MessageList({
       {showJump ? (
         <button
           type="button"
-          className="absolute bottom-3 start-1/2 z-10 -translate-x-1/2 rounded-full bg-secondary px-3 py-1.5 text-xs text-white shadow-lg"
+          className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-secondary px-3 py-1.5 text-xs font-medium text-white shadow-card"
           onClick={() => {
             stickToBottom.current = true;
             setShowJump(false);
             scrollToBottom("smooth");
           }}
         >
-          پیام جدید ↓
+          {copy.chat.newMessages} ↓
         </button>
       ) : null}
     </div>

@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect } from "react";
+import { copy } from "../../lib/copy";
 
 export function Sheet({
   open,
@@ -40,12 +41,12 @@ export function Sheet({
       <button
         type="button"
         className="absolute inset-0 bg-black/40"
-        aria-label="بستن"
+        aria-label={copy.common.close}
         onClick={onClose}
       />
-      <div className="absolute inset-x-0 bottom-0 mx-auto max-h-[85vh] w-full max-w-[720px] overflow-y-auto rounded-t-2xl bg-background p-4 shadow-xl">
+      <div className="absolute inset-x-0 bottom-0 mx-auto max-h-[85vh] w-full max-w-[720px] overflow-y-auto rounded-t-2xl border border-border bg-background p-4 shadow-soft">
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border" />
-        {title ? <h3 className="mb-3 text-base font-semibold text-secondary">{title}</h3> : null}
+        {title ? <h3 className="mb-3 text-base font-bold text-primary">{title}</h3> : null}
         {children}
       </div>
     </div>

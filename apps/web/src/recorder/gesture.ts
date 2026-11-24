@@ -1,3 +1,5 @@
+import { copy } from "../lib/copy";
+
 export const CANCEL_THRESHOLD_PX = 80;
 export const MIN_RECORD_MS = 1_000;
 export const MAX_RECORD_MS = 10 * 60_000;
@@ -49,8 +51,7 @@ export function isCancelGesture(dx: number, dir: Dir): boolean {
 }
 
 export function cancelHint(dir: Dir): string {
-  // RTL cancel is swipe-right →; LTR cancel is swipe-left ←
-  return dir === "rtl" ? "برای لغو بکش →" : "برای لغو بکش ←";
+  return dir === "rtl" ? copy.recorder.slideCancelRtl : copy.recorder.slideCancelLtr;
 }
 
 export function reduceGesture(
@@ -88,7 +89,7 @@ export function reduceGesture(
       if (state.ui !== "requesting-permission") {
         return { state: { ...state, hasPermission: true }, effects };
       }
-      effects.push({ type: "toast", message: "حالا دوباره نگه دار" });
+      effects.push({ type: "toast", message: copy.recorder.holdAgain });
       return {
         state: {
           ...state,
@@ -106,7 +107,7 @@ export function reduceGesture(
       if (state.ui !== "requesting-permission") {
         return { state, effects };
       }
-      effects.push({ type: "toast", message: "دسترسی میکروفن لازم است" });
+      effects.push({ type: "toast", message: copy.recorder.micRequired });
       return {
         state: {
           ...state,
@@ -158,7 +159,7 @@ export function reduceGesture(
       if (elapsed < MIN_RECORD_MS) {
         effects.push(
           { type: "stop-and-discard", reason: "too-short" },
-          { type: "toast", message: "برای ضبط، دکمه رو نگه دار" },
+          { type: "toast", message: copy.recorder.holdToRecordHint },
         );
         return {
           state: {

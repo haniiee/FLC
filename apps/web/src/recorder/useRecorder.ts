@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { copy } from "../lib/copy";
 import { usePlayer } from "../player/context";
 import {
   cancelHint,
@@ -15,9 +16,9 @@ import { baseMimeType, pickRecordingMime } from "./pick-mime";
 
 function readDir(): Dir {
   if (typeof document === "undefined") {
-    return "rtl";
+    return "ltr";
   }
-  return document.documentElement.dir === "ltr" ? "ltr" : "rtl";
+  return document.documentElement.dir === "rtl" ? "rtl" : "ltr";
 }
 
 function stopTracks(stream: MediaStream | null) {
@@ -118,16 +119,16 @@ export function useRecorder() {
 
   const startMedia = useCallback(async () => {
     if (typeof window !== "undefined" && !window.isSecureContext) {
-      toast.error("ضبط فقط روی https یا localhost کار می‌کند");
+      toast.error(copy.recorder.httpsOnly);
       return false;
     }
     if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      toast.error("این مرورگر از ضبط پشتیبانی نمی‌کند");
+      toast.error(copy.recorder.unsupportedBrowser);
       return false;
     }
     const mime = pickRecordingMime((type) => MediaRecorder.isTypeSupported(type));
     if (!mime) {
-      toast.error("فرمت ضبط روی این دستگاه پشتیبانی نمی‌شود");
+      toast.error(copy.recorder.unsupportedFormat);
       return false;
     }
 
@@ -179,7 +180,7 @@ export function useRecorder() {
             case "request-permission": {
               try {
                 if (!window.isSecureContext) {
-                  toast.error("ضبط فقط روی https یا localhost کار می‌کند");
+                  toast.error(copy.recorder.httpsOnly);
                   dispatchRef.current({ type: "permission-denied" });
                   break;
                 }
@@ -208,7 +209,7 @@ export function useRecorder() {
                   setGesture(next);
                 }
               } catch {
-                toast.error("دسترسی میکروفن لازم است");
+                toast.error(copy.recorder.micRequired);
                 cleanupMedia();
                 const next: GestureState = {
                   ...gestureRef.current,

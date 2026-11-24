@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { toast } from "sonner";
 import { getApiClient } from "../lib/api";
+import { copy } from "../lib/copy";
 import { apiErrorMessage } from "../lib/format";
 import { PlayerContext, type ChatVoicePlayInput, type PlayerApi } from "./context";
 import { FullPlayer } from "./FullPlayer";
@@ -99,8 +100,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const state = usePlayerStore.getState();
     const item = selectCurrentItem(state);
     const audio = audioRef.current;
-    // Chat voice uses sourceSessionId "chat" — do not persist resume position.
-    if (!item || !audio || !state.sourceSessionId || state.sourceSessionId === "chat") {
+    // Chat / personal playlist — do not persist resume against session playlist API.
+    if (
+      !item ||
+      !audio ||
+      !state.sourceSessionId ||
+      state.sourceSessionId === "chat" ||
+      state.sourceSessionId.startsWith("playlist:") ||
+      state.sourceSessionId === "queue"
+    ) {
       return;
     }
     const position = audio.currentTime || state.position;
@@ -215,7 +223,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         const meta = await resolveSessionMeta(sessionId);
         const queue = await buildQueue(sessionId, meta);
         if (queue.length === 0) {
-          toast.error("ویس آماده‌ای برای پخش نیست");
+          toast.error(copy.player.noVoiceReady);
           return;
         }
         let index = 0;
@@ -231,7 +239,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         loadIndex(index, { autoplay: true, reason: "user-play" });
         persistNow();
       } catch (error) {
-        toast.error(apiErrorMessage(error, "بارگذاری پلی‌لیست ناموفق بود"));
+        toast.error(apiErrorMessage(error, copy.player.playlistLoadFailed));
       }
     },
     [loadIndex, persistNow],
@@ -245,7 +253,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       }
       const item: PlayerQueueItem = {
         fileId: `chat:${input.messageId}`,
-        displayName: "پیام صوتی",
+        displayName: copy.player.voiceMessage,
         topicDisplayName: input.senderName,
         durationMs: input.durationMs,
         url: input.url,
@@ -256,6 +264,77 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       store.setQueue([item], 0, "chat");
       store.setResumePrompt(null);
       loadIndex(0, { seekTo: 0, autoplay: true, reason: "auto-advance" });
+    },
+    [loadIndex],
+  );
+
+  const playQueue = useCallback(
+    async (items: PlayerQueueItem[], startIndex = 0, startPositionMs?: number) => {
+      if (items.length === 0) {
+        toast.error(copy.player.noVoiceReady);
+        return;
+      }
+      const audio = audioRef.current;
+      if (audio) {
+        await unlockAudio(audio);
+      }
+      const index = Math.max(0, Math.min(startIndex, items.length - 1));
+      const store = usePlayerStore.getState();
+      store.setQueue(items, index, "queue");
+      store.setResumePrompt(null);
+      const seekTo =
+        typeof startPositionMs === "number" &&
+        Number.isFinite(startPositionMs) &&
+        startPositionMs >= 0
+          ? startPositionMs / 1000
+          : 0;
+      loadIndex(index, { seekTo, autoplay: true, reason: "auto-advance" });
+    },
+    [loadIndex],
+  );
+
+  const playPersonalPlaylist = useCallback(
+    async (playlistId: string, startIndex = 0, startPositionMs?: number) => {
+      const audio = audioRef.current;
+      if (audio) {
+        await unlockAudio(audio);
+      }
+      try {
+        const detail = await getApiClient().playlists.get(playlistId);
+        const queue: PlayerQueueItem[] = [];
+        for (const track of detail.items) {
+          if (!track.available || !track.url) continue;
+          const item: PlayerQueueItem = {
+            fileId: track.fileId,
+            displayName: track.displayName,
+            durationMs: track.durationMs,
+            url: track.url,
+            sessionDisplayName: track.sessionDisplayName,
+            groupDisplayName: track.groupDisplayName,
+          };
+          if (track.topicDisplayName) {
+            item.topicDisplayName = track.topicDisplayName;
+          }
+          queue.push(item);
+        }
+        if (queue.length === 0) {
+          toast.error(copy.player.noVoiceReady);
+          return;
+        }
+        const index = Math.max(0, Math.min(startIndex, queue.length - 1));
+        const store = usePlayerStore.getState();
+        store.setQueue(queue, index, `playlist:${playlistId}`);
+        store.setResumePrompt(null);
+        const seekTo =
+          typeof startPositionMs === "number" &&
+          Number.isFinite(startPositionMs) &&
+          startPositionMs >= 0
+            ? startPositionMs / 1000
+            : 0;
+        loadIndex(index, { seekTo, autoplay: true, reason: "auto-advance" });
+      } catch (error) {
+        toast.error(apiErrorMessage(error, copy.player.playlistLoadFailed));
+      }
     },
     [loadIndex],
   );
@@ -272,7 +351,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const meta = await resolveSessionMeta(saved.sessionId);
       const queue = await buildQueue(saved.sessionId, meta);
       if (queue.length === 0) {
-        toast.error("ویس آماده‌ای برای پخش نیست");
+        toast.error(copy.player.noVoiceReady);
         return;
       }
       let index = queue.findIndex((item) => item.fileId === saved.currentFileId);
@@ -290,7 +369,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       loadIndex(index, { autoplay: true, reason: "resume" });
       persistNow();
     } catch (error) {
-      toast.error(apiErrorMessage(error, "ادامه‌ی پخش ناموفق بود"));
+      toast.error(apiErrorMessage(error, copy.player.resumeFailed));
     }
   }, [loadIndex, persistNow]);
 
@@ -414,7 +493,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const refreshPlaylist = useCallback(async () => {
     const state = usePlayerStore.getState();
-    if (!state.sourceSessionId || state.sourceSessionId === "chat") {
+    if (
+      !state.sourceSessionId ||
+      state.sourceSessionId === "chat" ||
+      state.sourceSessionId === "queue" ||
+      state.sourceSessionId.startsWith("playlist:")
+    ) {
       return;
     }
     const current = selectCurrentItem(state);
@@ -438,6 +522,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     () => ({
       playSession,
       playChatVoice,
+      playPersonalPlaylist,
+      playQueue,
       toggle,
       play,
       pause,
@@ -458,6 +544,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     [
       playSession,
       playChatVoice,
+      playPersonalPlaylist,
+      playQueue,
       toggle,
       play,
       pause,
@@ -573,7 +661,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           return;
         }
         if (refreshingUrl.current) {
-          toast.error("پخش این ویس ممکن نیست");
+          toast.error(copy.player.cannotPlayVoice);
           const nextIndex = resolveNextIndex(
             state.currentIndex,
             state.queue.length,
@@ -594,7 +682,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             audio.src = refreshed.url;
             audio.load();
             applyPlaybackRate(audio, state.rate);
-            void audio.play().catch(() => toast.error("پخش این ویس ممکن نیست"));
+            void audio.play().catch(() => toast.error(copy.player.cannotPlayVoice));
             return;
           }
 
@@ -606,7 +694,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           usePlayerStore.getState().updateQueueUrls(queue);
           const refreshed = queue.find((entry) => entry.fileId === item.fileId);
           if (!refreshed) {
-            toast.error("این ویس دیگر در پلی‌لیست نیست");
+            toast.error(copy.player.voiceNotInPlaylist);
             const nextIndex = resolveNextIndex(state.currentIndex, queue.length, state.repeatMode);
             goToResolvedIndex(nextIndex, { seekTo: 0 });
             return;
@@ -618,7 +706,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           audio.load();
           applyPlaybackRate(audio, state.rate);
           void audio.play().catch(() => {
-            toast.error("پخش این ویس ممکن نیست");
+            toast.error(copy.player.cannotPlayVoice);
             const nextIndex = resolveNextIndex(
               usePlayerStore.getState().currentIndex,
               usePlayerStore.getState().queue.length,
@@ -627,7 +715,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             goToResolvedIndex(nextIndex, { seekTo: 0 });
           });
         } catch (error) {
-          toast.error(apiErrorMessage(error, "تازه‌سازی لینک پخش ناموفق بود"));
+          toast.error(apiErrorMessage(error, copy.player.refreshPlayUrlFailed));
           const nextIndex = resolveNextIndex(
             state.currentIndex,
             state.queue.length,
@@ -686,8 +774,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     bind("pause", () => pause());
     bind("previoustrack", () => prev());
     bind("nexttrack", () => next());
-    bind("seekbackward", () => skip(-15));
-    bind("seekforward", () => skip(15));
+    bind("seekbackward", () => skip(-10));
+    bind("seekforward", () => skip(10));
     bind("seekto", (details) => {
       if (typeof details.seekTime === "number") {
         seek(details.seekTime);

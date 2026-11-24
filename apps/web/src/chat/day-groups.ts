@@ -1,6 +1,7 @@
 import type { ClientChatMessage } from "./cache";
+import { copy } from "../lib/copy";
 
-const dayFormatter = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+const dayFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
   month: "long",
   day: "numeric",
@@ -23,13 +24,13 @@ export function formatDayLabel(iso: string, now = new Date()): string {
   const today = startOfLocalDay(now);
   const target = startOfLocalDay(date);
   const diffDays = Math.round((today - target) / 86_400_000);
-  if (diffDays === 0) return "امروز";
-  if (diffDays === 1) return "دیروز";
+  if (diffDays === 0) return copy.chat.today;
+  if (diffDays === 1) return copy.chat.yesterday;
   return dayFormatter.format(date);
 }
 
 export function formatMessageTime(iso: string): string {
-  return new Intl.DateTimeFormat("fa-IR", {
+  return new Intl.DateTimeFormat("en-US", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,

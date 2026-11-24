@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect } from "react";
+import { copy } from "../../lib/copy";
 
 export function Modal({
   open,
@@ -32,19 +33,19 @@ export function Modal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" dir="ltr">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button
         type="button"
         className="absolute inset-0 bg-black/45"
-        aria-label="Close"
+        aria-label={copy.common.close}
         onClick={onClose}
       />
       <div
-        className={`relative z-10 max-h-[90vh] w-full overflow-y-auto rounded-2xl border border-border bg-background p-5 shadow-xl ${
+        className={`relative z-10 max-h-[90vh] w-full overflow-y-auto rounded-xl border border-border bg-background p-5 shadow-soft ${
           wide ? "max-w-xl" : "max-w-md"
         }`}
       >
-        {title ? <h3 className="mb-4 text-lg font-semibold text-secondary">{title}</h3> : null}
+        {title ? <h3 className="mb-4 text-lg font-bold text-primary">{title}</h3> : null}
         {children}
       </div>
     </div>

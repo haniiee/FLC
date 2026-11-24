@@ -25,6 +25,7 @@ import { MessageList } from "../../../../../components/chat/MessageList";
 import { Spinner } from "../../../../../components/ui/Spinner";
 import { EmptyState } from "../../../../../components/ui/EmptyState";
 import { getApiClient } from "../../../../../lib/api";
+import { copy } from "../../../../../lib/copy";
 import { apiErrorMessage } from "../../../../../lib/format";
 import { useAuth } from "../../../../../providers/auth-provider";
 import { useChannel } from "../../../../../realtime/useChannel";
@@ -110,7 +111,7 @@ export default function ChatChannelPage() {
         setReplyTo(null);
       } catch (error) {
         patchCache((prev) => markOptimisticFailed(prev, id));
-        toast.error(apiErrorMessage(error, "ارسال ناموفق بود"));
+        toast.error(apiErrorMessage(error, copy.chat.sendFailed));
       }
     },
     [channelId, groupQuery.data?.myRole, patchCache, user],
@@ -157,7 +158,7 @@ export default function ChatChannelPage() {
         setReplyTo(null);
       } catch (error) {
         patchCache((prev) => markOptimisticFailed(prev, tempId));
-        toast.error(apiErrorMessage(error, "ارسال ویس ناموفق بود"));
+        toast.error(apiErrorMessage(error, copy.chat.voiceSendFailed));
       }
     },
     [channelId, groupQuery.data?.myRole, patchCache, replyTo?.id, user],
@@ -179,21 +180,26 @@ export default function ChatChannelPage() {
   }
 
   if (!groupQuery.data || !channel) {
-    return <EmptyState title="چت پیدا نشد" />;
+    return <EmptyState title={copy.chat.chatNotFound} />;
   }
 
   if (!user) {
-    return <EmptyState title="برای چت وارد شوید" />;
+    return <EmptyState title={copy.chat.signInRequired} />;
   }
 
   return (
-    <div className="-mx-4 -my-5 flex h-[calc(100dvh-64px)] flex-col">
-      <div className="border-b border-border px-3 py-2">
-        <Link href={`/groups/${groupId}`} className="text-xs text-text-muted">
-          → بازگشت
+    <div className="-mx-4 -my-5 flex h-[calc(100dvh-64px)] flex-col bg-background">
+      <div className="border-b border-border bg-hero-navy px-3 py-3 text-white shadow-card">
+        <Link
+          href={`/groups/${groupId}`}
+          className="text-xs font-medium text-white/70 hover:text-white"
+        >
+          ← {copy.common.back}
         </Link>
-        <h1 className="text-lg font-bold text-secondary">{groupQuery.data.name}</h1>
-        <p className="text-sm text-text-muted">{title}</p>
+        <h1 className="mt-1 text-lg font-bold" dir="auto">
+          {groupQuery.data.name}
+        </h1>
+        <p className="text-sm text-white/75">{title}</p>
       </div>
 
       <ConnectionBanner connected={connected} />
@@ -210,7 +216,8 @@ export default function ChatChannelPage() {
         }}
         onReply={(message) => setReplyTo(message)}
         onDelete={(message) => {
-          if (!window.confirm("این پیام حذف شود؟")) return;
+          if (!window.confirm(`${copy.chat.deleteConfirmTitle}\n${copy.chat.deleteConfirmMessage}`))
+            return;
           void deleteMutation.mutateAsync(message.id);
         }}
         onRetry={(message) => {

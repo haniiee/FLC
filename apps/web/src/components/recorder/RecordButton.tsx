@@ -2,6 +2,7 @@
 
 import { useCallback, useRef } from "react";
 import { toast } from "sonner";
+import { copy } from "../../lib/copy";
 import { apiErrorMessage } from "../../lib/format";
 import { usePlayerStore } from "../../player/store";
 import { uploadRecording } from "../../recorder/upload-recording";
@@ -64,12 +65,12 @@ export function RecordButton({
               ? {
                   ...row,
                   status: "failed",
-                  error: apiErrorMessage(error, "ارسال ناموفق بود"),
+                  error: apiErrorMessage(error, copy.content.sendFailed),
                 }
               : row,
           ),
         );
-        toast.error(apiErrorMessage(error, "ارسال ناموفق بود"));
+        toast.error(apiErrorMessage(error, copy.content.sendFailed));
       }
     },
     [sessionId, topicId],
@@ -91,7 +92,7 @@ export function RecordButton({
     [runUpload],
   );
 
-  const bottomClass = hasMiniPlayer ? "bottom-24" : "bottom-6";
+  const bottomClass = hasMiniPlayer ? "bottom-40 md:bottom-24" : "bottom-24 md:bottom-6";
 
   return (
     <>
@@ -99,17 +100,17 @@ export function RecordButton({
         item.status === "failed" ? (
           <div
             key={item.id}
-            className={`fixed inset-x-0 z-30 mx-auto flex max-w-[720px] items-center justify-between gap-2 px-4 ${bottomClass}`}
+            className={`fixed inset-x-0 z-30 mx-auto flex max-w-[720px] items-center justify-between gap-2 rounded-lg border border-border bg-surface px-4 py-2 shadow-card ${bottomClass}`}
             style={{ marginBottom: "4.5rem" }}
           >
-            <p className="text-sm text-danger">ارسال ناموفق</p>
+            <p className="text-sm text-danger">{copy.content.sendFailed}</p>
             <Button
               type="button"
               variant="secondary"
               className="text-xs"
               onClick={() => void runUpload(item)}
             >
-              تلاش دوباره
+              {copy.chat.tryAgain}
             </Button>
           </div>
         ) : null,

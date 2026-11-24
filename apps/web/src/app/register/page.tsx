@@ -6,7 +6,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
+import { Hero } from "../../components/ui/Hero";
 import { Input } from "../../components/ui/Input";
+import { copy } from "../../lib/copy";
 import { getApiClient } from "../../lib/api";
 import { apiErrorMessage } from "../../lib/format";
 import { useAuth } from "../../providers/auth-provider";
@@ -27,59 +29,63 @@ export default function RegisterPage() {
     try {
       await getApiClient().register({ displayName, phone, password });
       await setSessionFromAuth();
-      toast.success("ثبت‌نام موفق");
+      toast.success(copy.auth.registerSuccess);
       router.replace(next);
     } catch (error) {
-      toast.error(apiErrorMessage(error, "ثبت‌نام ناموفق بود"));
+      toast.error(apiErrorMessage(error, copy.auth.registerFailed));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <Card className="mx-auto max-w-md space-y-4">
-      <div>
-        <h1 className="text-xl font-bold text-secondary">ثبت‌نام</h1>
-        <p className="mt-1 text-sm text-text-muted">حساب جدید بسازید</p>
-      </div>
-      <form className="space-y-3" onSubmit={(event) => void onSubmit(event)}>
-        <Input
-          label="نام نمایشی"
-          value={displayName}
-          onChange={(event) => setDisplayName(event.target.value)}
-          required
-        />
-        <Input
-          label="شماره موبایل"
-          inputMode="tel"
-          autoComplete="tel"
-          placeholder="0912..."
-          value={phone}
-          onChange={(event) => setPhone(event.target.value)}
-          required
-        />
-        <Input
-          label="رمز عبور (حداقل ۸ کاراکتر)"
-          type="password"
-          autoComplete="new-password"
-          minLength={8}
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          required
-        />
-        <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? "در حال ثبت‌نام..." : "ثبت‌نام"}
-        </Button>
-      </form>
-      <p className="text-center text-sm text-text-muted">
-        قبلاً ثبت‌نام کرده‌اید؟{" "}
-        <Link
-          className="font-medium text-secondary underline"
-          href={`/login?next=${encodeURIComponent(next)}`}
-        >
-          ورود
-        </Link>
-      </p>
-    </Card>
+    <div className="mx-auto max-w-md space-y-4">
+      <Hero>
+        <h1 className="text-2xl font-extrabold">{copy.auth.createAccountTitle}</h1>
+        <p className="mt-2 text-sm text-white/80">{copy.auth.registerSubtitle}</p>
+      </Hero>
+      <Card className="space-y-4">
+        <form className="space-y-3" onSubmit={(event) => void onSubmit(event)}>
+          <Input
+            label={copy.auth.displayName}
+            value={displayName}
+            onChange={(event) => setDisplayName(event.target.value)}
+            required
+            dir="auto"
+          />
+          <Input
+            label={copy.auth.phone}
+            inputMode="tel"
+            autoComplete="tel"
+            placeholder={copy.auth.phonePlaceholder}
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+            required
+            dir="ltr"
+          />
+          <Input
+            label={copy.auth.passwordMinHint}
+            type="password"
+            autoComplete="new-password"
+            minLength={8}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? copy.auth.creatingAccount : copy.auth.createAccountCta}
+          </Button>
+        </form>
+        <p className="text-center text-sm text-text-muted">
+          {copy.auth.alreadyHaveAccount}{" "}
+          <Link
+            className="font-medium text-primary underline"
+            href={`/login?next=${encodeURIComponent(next)}`}
+          >
+            {copy.auth.logInLink}
+          </Link>
+        </p>
+      </Card>
+    </div>
   );
 }

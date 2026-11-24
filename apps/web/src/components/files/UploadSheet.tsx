@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { getApiClient } from "../../lib/api";
+import { copy } from "../../lib/copy";
 import { apiErrorMessage, FILE_ACCEPT } from "../../lib/format";
 import { Button } from "../ui/Button";
 import { Sheet } from "../ui/Sheet";
@@ -76,7 +77,7 @@ export function UploadSheet({
           current.map((item) => (item.id === id ? { ...item, progress: 1 } : item)),
         );
       } catch (error) {
-        const message = apiErrorMessage(error, "آپلود ناموفق");
+        const message = apiErrorMessage(error, copy.content.uploadFailed);
         setItems((current) =>
           current.map((item) => (item.id === id ? { ...item, error: message } : item)),
         );
@@ -86,7 +87,7 @@ export function UploadSheet({
 
     setBusy(false);
     onDone();
-    toast.success("آپلود به پایان رسید");
+    toast.success(copy.content.uploadComplete);
   }
 
   async function submitText() {
@@ -100,7 +101,7 @@ export function UploadSheet({
         topicId,
         content: text,
       });
-      toast.success("متن اضافه شد");
+      toast.success(copy.content.textAdded);
       onDone();
       close();
     } catch (error) {
@@ -111,7 +112,7 @@ export function UploadSheet({
   }
 
   return (
-    <Sheet open={open} onClose={close} title="افزودن">
+    <Sheet open={open} onClose={close} title={copy.content.addFile}>
       <input
         ref={fileInputRef}
         type="file"
@@ -127,7 +128,7 @@ export function UploadSheet({
       {mode === "menu" ? (
         <div className="space-y-2">
           <Button type="button" className="w-full" onClick={() => fileInputRef.current?.click()}>
-            فایل
+            {copy.content.upload}
           </Button>
           <Button
             type="button"
@@ -135,7 +136,7 @@ export function UploadSheet({
             className="w-full"
             onClick={() => setMode("text")}
           >
-            متن
+            {copy.content.textFile}
           </Button>
         </div>
       ) : null}
@@ -143,10 +144,11 @@ export function UploadSheet({
       {mode === "text" ? (
         <div className="space-y-3">
           <textarea
-            className="min-h-40 w-full rounded-md border border-border bg-background p-3 text-sm outline-none focus:border-secondary"
-            placeholder="متن را بنویسید..."
+            className="min-h-40 w-full rounded-lg border border-border bg-background p-3 text-sm outline-none focus:border-secondary focus:ring-2 focus:ring-primary-soft"
+            placeholder={copy.content.writeTextPlaceholder}
             value={text}
             onChange={(event) => setText(event.target.value)}
+            dir="auto"
           />
           <div className="flex gap-2">
             <Button
@@ -155,7 +157,7 @@ export function UploadSheet({
               className="flex-1"
               onClick={() => setMode("menu")}
             >
-              بازگشت
+              {copy.common.back}
             </Button>
             <Button
               type="button"
@@ -163,7 +165,7 @@ export function UploadSheet({
               disabled={busy}
               onClick={() => void submitText()}
             >
-              ذخیره
+              {copy.content.save}
             </Button>
           </div>
         </div>
@@ -172,11 +174,13 @@ export function UploadSheet({
       {mode === "files" ? (
         <div className="space-y-3">
           {items.map((item) => (
-            <div key={item.id} className="rounded-md border border-border p-3">
+            <div key={item.id} className="rounded-lg border border-border p-3 shadow-card">
               <div className="flex items-center justify-between gap-2 text-sm">
-                <span className="truncate">{item.name}</span>
+                <span className="truncate" dir="auto">
+                  {item.name}
+                </span>
                 <span className="text-xs text-text-muted">
-                  {item.error ? "خطا" : `${Math.round(item.progress * 100)}%`}
+                  {item.error ? copy.content.errorLabel : `${Math.round(item.progress * 100)}%`}
                 </span>
               </div>
               <div className="mt-2 h-2 overflow-hidden rounded-full bg-border">
@@ -189,7 +193,7 @@ export function UploadSheet({
             </div>
           ))}
           <Button type="button" className="w-full" disabled={busy} onClick={close}>
-            بستن
+            {copy.common.close}
           </Button>
         </div>
       ) : null}

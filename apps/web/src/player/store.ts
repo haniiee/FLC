@@ -38,7 +38,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   position: 0,
   duration: 0,
   rate: 1,
-  repeatMode: "off",
+  repeatMode: "all",
   sourceSessionId: null,
   fullPlayerOpen: false,
   resumePrompt: null,

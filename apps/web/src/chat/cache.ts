@@ -1,4 +1,5 @@
 import type { ChatChannelKind, ChatMessage, GroupRole } from "@app/shared-types";
+import { copy } from "../lib/copy";
 
 export const CHAT_PAGE_SIZE = 50;
 
@@ -218,5 +219,5 @@ export function canDeleteMessage(input: {
 }
 
 export function channelTitle(kind: ChatChannelKind): string {
-  return kind === "all" ? "چت کلاس" : "چت دانشجوها";
+  return kind === "all" ? copy.chat.allChannel : copy.chat.studentsChannel;
 }

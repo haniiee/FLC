@@ -1,12 +1,21 @@
 "use client";
 
 import type { FileDto, GroupRole } from "@app/shared-types";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { getApiClient } from "../../lib/api";
+import {
+  bookmarksForFileQueryKey,
+  bookmarksQueryKey,
+  fileLevelBookmark,
+  isFileBookmarked,
+} from "../../lib/bookmark-logic";
+import { copy } from "../../lib/copy";
 import { apiErrorMessage, formatBytes, formatDuration, kindLabel } from "../../lib/format";
 import { usePlayer } from "../../player/context";
 import { usePlayerStore } from "../../player/store";
+import { AddToPlaylistModal } from "../playlists/AddToPlaylistModal";
 import { ItemActionsMenu } from "../content/ItemActionsMenu";
 import { Button } from "../ui/Button";
 import { Sheet } from "../ui/Sheet";
@@ -41,14 +50,14 @@ function StatusBadge({
   if (status === "processing") {
     return (
       <span className="mt-2 inline-block rounded px-2 py-0.5 text-[11px] bg-primary-soft text-secondary">
-        در حال پردازش…
+        {copy.content.processing}
       </span>
     );
   }
   if (status === "pending" && canManage) {
     return (
       <span className="mt-2 inline-block rounded px-2 py-0.5 text-[11px] bg-primary-soft text-secondary">
-        در انتظار آپلود
+        {copy.content.awaitingUpload}
       </span>
     );
   }
@@ -56,11 +65,11 @@ function StatusBadge({
     return (
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <span className="inline-block rounded bg-danger/10 px-2 py-0.5 text-[11px] text-danger">
-          خطا
+          {copy.content.errorLabel}
         </span>
         {onReprocess ? (
           <Button type="button" variant="ghost" className="px-2 py-1 text-xs" onClick={onReprocess}>
-            پردازش دوباره
+            {copy.content.reprocess}
           </Button>
         ) : null}
       </div>
@@ -80,10 +89,10 @@ export function OptimisticFileRow({ title, progress }: { title: string; progress
         <div className="min-w-0 flex-1">
           <p className="font-medium text-text">{title}</p>
           <p className="mt-1 text-xs text-text-muted">
-            صوت · <bdi dir="ltr">{pct}%</bdi>
+            {kindLabel("audio")} · <bdi dir="ltr">{pct}%</bdi>
           </p>
-          <span className="mt-2 inline-block rounded bg-primary-soft px-2 py-0.5 text-[11px] text-secondary">
-            در حال ارسال…
+          <span className="mt-2 inline-block rounded-md bg-primary-soft px-2 py-0.5 text-[11px] text-secondary">
+            {copy.content.uploading}
           </span>
         </div>
       </div>
@@ -96,13 +105,20 @@ export function FileRow({
   canManage,
   onChanged,
   sessionId,
+  selectMode,
+  selected,
+  onToggleSelect,
 }: {
   file: FileDto;
   canManage: boolean;
   onChanged: () => void;
   sessionId?: string;
+  selectMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const player = usePlayer();
+  const queryClient = useQueryClient();
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const currentFileId = usePlayerStore((s) => s.queue[s.currentIndex]?.fileId);
   const isCurrent = currentFileId === file.id;
@@ -110,8 +126,17 @@ export function FileRow({
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [textOpen, setTextOpen] = useState(false);
   const [reprocessing, setReprocessing] = useState(false);
+  const [playlistOpen, setPlaylistOpen] = useState(false);
 
   const playable = file.status === "ready";
+
+  const bookmarksQuery = useQuery({
+    queryKey: bookmarksForFileQueryKey(file.id),
+    queryFn: () => getApiClient().bookmarks.list({ fileId: file.id }),
+    enabled: playable,
+  });
+
+  const fileBookmarked = isFileBookmarked(bookmarksQuery.data?.items ?? [], file.id);
 
   async function resolveUrl(download = false) {
     const result = await getApiClient().getFileUrl(file.id, download);
@@ -125,7 +150,7 @@ export function FileRow({
       }
       if (file.kind === "audio") {
         if (!sessionId) {
-          toast.error("شناسه جلسه برای پخش موجود نیست");
+          toast.error(copy.content.sessionIdMissing);
           return;
         }
         if (isCurrent) {
@@ -151,7 +176,7 @@ export function FileRow({
         setTextOpen(true);
       }
     } catch (error) {
-      toast.error(apiErrorMessage(error, "باز کردن فایل ناموفق بود"));
+      toast.error(apiErrorMessage(error, copy.content.openFailed));
     }
   }
 
@@ -159,7 +184,7 @@ export function FileRow({
     try {
       window.open(await resolveUrl(true), "_blank", "noopener,noreferrer");
     } catch (error) {
-      toast.error(apiErrorMessage(error, "دانلود ناموفق بود"));
+      toast.error(apiErrorMessage(error, copy.content.downloadFailed));
     }
   }
 
@@ -169,7 +194,7 @@ export function FileRow({
       await getApiClient().reprocessFile(file.id);
       onChanged();
     } catch (error) {
-      toast.error(apiErrorMessage(error, "پردازش دوباره ناموفق بود"));
+      toast.error(apiErrorMessage(error, copy.content.reprocessFailed));
     } finally {
       setReprocessing(false);
     }
@@ -178,13 +203,61 @@ export function FileRow({
   const sizePart = formatBytes(file.sizeBytes);
   const durationPart = formatDuration(file.durationMs);
 
+  const actionExtras =
+    playable && file.kind === "audio"
+      ? [
+          {
+            title: copy.library.addToPlaylist,
+            onPress: () => setPlaylistOpen(true),
+          },
+        ]
+      : [];
+
+  const bookmarkAction = playable
+    ? {
+        title: fileBookmarked ? copy.library.removeBookmark : copy.library.bookmark,
+        onPress: () => {
+          void (async () => {
+            try {
+              if (fileBookmarked) {
+                const existing = fileLevelBookmark(bookmarksQuery.data?.items ?? [], file.id);
+                if (existing) {
+                  await getApiClient().bookmarks.remove(existing.id);
+                  toast.success(copy.library.removeBookmark);
+                }
+              } else {
+                await getApiClient().bookmarks.create({ fileId: file.id });
+                toast.success(copy.library.bookmark);
+              }
+              await queryClient.invalidateQueries({ queryKey: bookmarksForFileQueryKey(file.id) });
+              await queryClient.invalidateQueries({ queryKey: bookmarksQueryKey });
+            } catch (error) {
+              toast.error(apiErrorMessage(error));
+            }
+          })();
+        },
+      }
+    : null;
+
+  const showActionsMenu = canManage || playable;
+
   return (
     <div className="rounded-lg border border-border bg-surface p-3">
       <div className="flex items-start gap-3">
+        {selectMode && playable && file.kind === "audio" ? (
+          <button
+            type="button"
+            aria-pressed={selected}
+            className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border bg-background"
+            onClick={onToggleSelect}
+          >
+            {selected ? "✓" : ""}
+          </button>
+        ) : null}
         {file.kind === "audio" && playable ? (
           <button
             type="button"
-            aria-label={isCurrent && isPlaying ? "توقف" : "پخش"}
+            aria-label={isCurrent && isPlaying ? copy.player.pause : copy.player.play}
             className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm text-on-primary"
             onClick={() => void onOpen()}
           >
@@ -203,11 +276,11 @@ export function FileRow({
         <div className="min-w-0 flex-1">
           <button
             type="button"
-            className="block w-full text-right font-medium text-text disabled:opacity-60"
+            className="block w-full text-start font-medium text-text disabled:opacity-60"
             disabled={!playable && file.kind === "audio"}
             onClick={() => void onOpen()}
           >
-            {file.displayName}
+            <span dir="auto">{file.displayName}</span>
           </button>
           <p className="mt-1 text-xs text-text-muted">
             {kindLabel(file.kind)}
@@ -242,24 +315,39 @@ export function FileRow({
               className="px-2 py-1 text-xs"
               onClick={() => void onDownload()}
             >
-              دانلود
+              {copy.content.download}
             </Button>
           ) : null}
-          {canManage ? (
+          {showActionsMenu ? (
             <ItemActionsMenu
               title={file.title}
-              onRename={async (title) => {
-                await getApiClient().updateFile(file.id, { title });
-                onChanged();
-              }}
-              onDelete={async () => {
-                await getApiClient().deleteFile(file.id);
-                onChanged();
-              }}
+              extraActions={[...actionExtras, ...(bookmarkAction ? [bookmarkAction] : [])]}
+              onRename={
+                canManage
+                  ? async (title) => {
+                      await getApiClient().updateFile(file.id, { title });
+                      onChanged();
+                    }
+                  : undefined
+              }
+              onDelete={
+                canManage
+                  ? async () => {
+                      await getApiClient().deleteFile(file.id);
+                      onChanged();
+                    }
+                  : undefined
+              }
             />
           ) : null}
         </div>
       </div>
+
+      <AddToPlaylistModal
+        open={playlistOpen}
+        onClose={() => setPlaylistOpen(false)}
+        fileIds={[file.id]}
+      />
 
       <Sheet
         open={Boolean(imageUrl)}
@@ -289,7 +377,7 @@ export function FileRow({
         title={file.displayName ?? undefined}
       >
         <pre className="whitespace-pre-wrap rounded-md bg-surface p-3 text-sm text-text">
-          {file.textContent ?? "متن در دسترس نیست"}
+          {file.textContent ?? copy.content.textUnavailable}
         </pre>
       </Sheet>
     </div>

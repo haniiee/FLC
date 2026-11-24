@@ -6,7 +6,9 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
+import { Hero } from "../../components/ui/Hero";
 import { Input } from "../../components/ui/Input";
+import { copy } from "../../lib/copy";
 import { getApiClient } from "../../lib/api";
 import { apiErrorMessage } from "../../lib/format";
 import { useAuth } from "../../providers/auth-provider";
@@ -20,11 +22,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+  function destinationFor(role: string | undefined, mustChange: boolean | undefined) {
+    if (mustChange) return "/change-password";
+    if (role === "admin") return "/admin/groups";
+    return next;
+  }
+
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      router.replace(user?.mustChangePassword ? "/change-password" : next);
+      router.replace(destinationFor(user?.platformRole, user?.mustChangePassword));
     }
-  }, [isAuthenticated, isLoading, next, router, user?.mustChangePassword]);
+  }, [isAuthenticated, isLoading, next, router, user?.mustChangePassword, user?.platformRole]);
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -32,56 +40,55 @@ export default function LoginPage() {
     try {
       const auth = await getApiClient().login({ phone, password });
       await setSessionFromAuth();
-      toast.success("ورود موفق");
-      if (auth.user.mustChangePassword) {
-        router.replace("/change-password");
-      } else {
-        router.replace(next);
-      }
+      toast.success(copy.auth.loginSuccess);
+      router.replace(destinationFor(auth.user.platformRole, auth.user.mustChangePassword));
     } catch (error) {
-      toast.error(apiErrorMessage(error, "ورود ناموفق بود"));
+      toast.error(apiErrorMessage(error, copy.auth.loginFailed));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <Card className="mx-auto max-w-md space-y-4">
-      <div>
-        <h1 className="text-xl font-bold text-secondary">ورود</h1>
-        <p className="mt-1 text-sm text-text-muted">با شماره موبایل وارد شوید</p>
-      </div>
-      <form className="space-y-3" onSubmit={(event) => void onSubmit(event)}>
-        <Input
-          label="شماره موبایل"
-          inputMode="tel"
-          autoComplete="tel"
-          placeholder="0912..."
-          value={phone}
-          onChange={(event) => setPhone(event.target.value)}
-          required
-        />
-        <Input
-          label="رمز عبور"
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          required
-        />
-        <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? "در حال ورود..." : "ورود"}
-        </Button>
-      </form>
-      <p className="text-center text-sm text-text-muted">
-        حساب ندارید؟{" "}
-        <Link
-          className="font-medium text-secondary underline"
-          href={`/register?next=${encodeURIComponent(next)}`}
-        >
-          ثبت‌نام
-        </Link>
-      </p>
-    </Card>
+    <div className="mx-auto max-w-md space-y-4">
+      <Hero>
+        <h1 className="text-2xl font-extrabold">{copy.auth.welcomeBack}</h1>
+        <p className="mt-2 text-sm text-white/80">{copy.auth.loginSubtitle}</p>
+      </Hero>
+      <Card className="space-y-4">
+        <form className="space-y-3" onSubmit={(event) => void onSubmit(event)}>
+          <Input
+            label={copy.auth.phone}
+            inputMode="tel"
+            autoComplete="tel"
+            placeholder={copy.auth.phonePlaceholder}
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+            required
+            dir="ltr"
+          />
+          <Input
+            label={copy.auth.password}
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? copy.auth.loggingIn : copy.auth.logIn}
+          </Button>
+        </form>
+        <p className="text-center text-sm text-text-muted">
+          {copy.auth.newHere}{" "}
+          <Link
+            className="font-medium text-primary underline"
+            href={`/register?next=${encodeURIComponent(next)}`}
+          >
+            {copy.auth.createAccountLink}
+          </Link>
+        </p>
+      </Card>
+    </div>
   );
 }

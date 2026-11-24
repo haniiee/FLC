@@ -11,10 +11,10 @@ export function Input({
 }: InputHTMLAttributes<HTMLInputElement> & { label?: string; error?: string }) {
   return (
     <label className="block space-y-1.5">
-      {label ? <span className="text-sm font-medium text-text">{label}</span> : null}
+      {label ? <span className="text-sm font-semibold text-text">{label}</span> : null}
       <input
         className={clsx(
-          "w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm text-text outline-none transition focus:border-secondary",
+          "w-full rounded-md border border-border bg-surface px-3 py-2.5 text-sm text-text outline-none transition placeholder:text-text-muted/70 focus:border-secondary focus:ring-2 focus:ring-primary-soft",
           error && "border-danger",
           className,
         )}

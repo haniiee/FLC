@@ -5,7 +5,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
+import { Hero } from "../../components/ui/Hero";
 import { Input } from "../../components/ui/Input";
+import { copy } from "../../lib/copy";
 import { getApiClient } from "../../lib/api";
 import { apiErrorMessage } from "../../lib/format";
 import { useAuth } from "../../providers/auth-provider";
@@ -21,11 +23,11 @@ export default function ChangePasswordPage() {
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (newPassword !== confirmPassword) {
-      toast.error("New passwords do not match");
+      toast.error(copy.auth.passwordMismatch);
       return;
     }
     if (newPassword.length < 8) {
-      toast.error("New password must be at least 8 characters");
+      toast.error(copy.auth.passwordTooShort);
       return;
     }
 
@@ -33,31 +35,26 @@ export default function ChangePasswordPage() {
     try {
       await getApiClient().changePassword({ currentPassword, newPassword });
       await refreshUser();
-      toast.success("Password updated");
-      router.replace(user?.platformRole === "admin" ? "/admin" : "/");
+      toast.success(copy.auth.passwordUpdated);
+      router.replace(user?.platformRole === "admin" ? "/admin/groups" : "/");
     } catch (error) {
-      toast.error(apiErrorMessage(error, "Could not update password"));
+      toast.error(apiErrorMessage(error, copy.auth.changePasswordFailed));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="mx-auto max-w-md space-y-4" dir="ltr">
-      <Card className="space-y-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary/70">
-            Security
-          </p>
-          <h1 className="mt-1 text-2xl font-bold text-secondary">Change password</h1>
-          <p className="mt-2 text-sm text-text-muted">
-            You must set a new password before continuing.
-          </p>
-        </div>
+    <div className="mx-auto max-w-md space-y-4">
+      <Hero>
+        <h1 className="text-2xl font-extrabold">{copy.auth.changePasswordTitle}</h1>
+        <p className="mt-2 text-sm text-white/80">{copy.auth.changePasswordSubtitle}</p>
+      </Hero>
 
+      <Card className="space-y-4">
         <form className="space-y-3" onSubmit={(event) => void onSubmit(event)}>
           <Input
-            label="Current password"
+            label={copy.auth.currentPassword}
             type="password"
             autoComplete="current-password"
             value={currentPassword}
@@ -65,7 +62,7 @@ export default function ChangePasswordPage() {
             required
           />
           <Input
-            label="New password"
+            label={copy.auth.newPassword}
             type="password"
             autoComplete="new-password"
             value={newPassword}
@@ -74,7 +71,7 @@ export default function ChangePasswordPage() {
             minLength={8}
           />
           <Input
-            label="Confirm new password"
+            label={copy.auth.confirmNewPassword}
             type="password"
             autoComplete="new-password"
             value={confirmPassword}
@@ -83,12 +80,12 @@ export default function ChangePasswordPage() {
             minLength={8}
           />
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Saving…" : "Update password"}
+            {loading ? copy.auth.updatingPassword : copy.auth.updatePassword}
           </Button>
         </form>
 
         <Button type="button" variant="ghost" className="w-full" onClick={() => void logout()}>
-          Sign out
+          {copy.auth.signOut}
         </Button>
       </Card>
     </div>

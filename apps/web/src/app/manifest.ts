@@ -4,12 +4,13 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "FLC",
     short_name: "FLC",
-    lang: "fa",
-    dir: "rtl",
+    description: "Forough Mah Taban Academy — FLC",
+    lang: "en",
+    dir: "ltr",
     start_url: "/",
     scope: "/",
     display: "standalone",
-    background_color: "#FFFFFF",
+    background_color: "#F6F7FB",
     theme_color: "#0F1E4A",
     icons: [
       {

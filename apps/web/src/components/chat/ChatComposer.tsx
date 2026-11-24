@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ClientChatMessage } from "../../chat/cache";
+import { copy } from "../../lib/copy";
 import type { RecorderResult } from "../../recorder/useRecorder";
 import { HoldToRecordButton } from "../recorder/HoldToRecordButton";
 
@@ -48,17 +49,19 @@ export function ChatComposer({
 
   const replyLabel = useMemo(() => {
     if (!replyTo) return null;
-    if (replyTo.deleted) return "این پیام حذف شد";
-    if (replyTo.type === "voice") return "پیام صوتی";
+    if (replyTo.deleted) return copy.chat.messageDeleted;
+    if (replyTo.type === "voice") return copy.chat.voiceMessage;
     return replyTo.text ?? "";
   }, [replyTo]);
 
   return (
-    <div className="border-t border-border bg-surface px-3 py-2">
+    <div className="border-t border-border bg-surface px-3 py-2 shadow-card">
       {replyTo ? (
-        <div className="mb-2 flex items-start gap-2 rounded-lg bg-black/5 px-2 py-1.5">
+        <div className="mb-2 flex items-start gap-2 rounded-lg border border-border bg-surface-muted/60 px-2 py-1.5">
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-secondary">{replyTo.sender.displayName}</p>
+            <p className="text-xs font-medium text-secondary" dir="auto">
+              {replyTo.sender.displayName}
+            </p>
             <p className="truncate text-xs text-text-muted" dir="auto">
               {replyLabel}
             </p>
@@ -66,7 +69,7 @@ export function ChatComposer({
           <button
             type="button"
             className="text-text-muted"
-            aria-label="لغو پاسخ"
+            aria-label={copy.chat.cancelReply}
             onClick={onClearReply}
           >
             ✕
@@ -81,8 +84,8 @@ export function ChatComposer({
           dir="auto"
           disabled={disabled}
           value={text}
-          placeholder="پیام…"
-          className="max-h-[7.5rem] min-h-[2.75rem] flex-1 resize-none rounded-2xl border border-border bg-white px-3 py-2 text-sm outline-none focus:border-secondary"
+          placeholder={copy.chat.messagePlaceholder}
+          className="max-h-[7.5rem] min-h-[2.75rem] flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-secondary focus:ring-2 focus:ring-primary-soft"
           onChange={(event) => setText(event.target.value)}
           onKeyDown={(event) => {
             if (coarse) return;
@@ -107,8 +110,8 @@ export function ChatComposer({
           <button
             type="button"
             disabled={disabled || !trimmed}
-            aria-label="ارسال"
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-lg text-on-primary disabled:opacity-50"
+            aria-label={copy.chat.send}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-lg text-on-primary shadow-card disabled:opacity-50"
             onClick={() => {
               if (!trimmed) return;
               onSendText(trimmed);

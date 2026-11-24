@@ -12,8 +12,10 @@ import { RecordButton, type PendingUpload } from "../../../components/recorder/R
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
+import { Hero } from "../../../components/ui/Hero";
 import { Spinner } from "../../../components/ui/Spinner";
 import { getApiClient } from "../../../lib/api";
+import { copy } from "../../../lib/copy";
 import { apiErrorMessage } from "../../../lib/format";
 import { usePlayer } from "../../../player/context";
 import { filesRefetchInterval } from "../../../recorder/refetch-interval";
@@ -62,7 +64,7 @@ export default function SessionPage() {
     mutationFn: () => getApiClient().createTopic(sessionId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
-      toast.success("تاپیک ساخته شد");
+      toast.success(copy.content.topicCreated);
     },
     onError: (error) => toast.error(apiErrorMessage(error)),
   });
@@ -80,19 +82,24 @@ export default function SessionPage() {
   }
 
   if (!sessionQuery.data) {
-    return <EmptyState title="جلسه پیدا نشد" />;
+    return <EmptyState title={copy.content.sessionNotFound} />;
   }
 
   const { session, topics, files } = sessionQuery.data;
 
   return (
     <div className={`space-y-4 ${canManage ? "pb-28" : ""}`}>
-      <div>
-        <Link href={`/groups/${session.groupId}`} className="text-xs text-text-muted">
-          → بازگشت به کلاس
+      <Hero>
+        <Link
+          href={`/groups/${session.groupId}`}
+          className="text-xs font-medium text-white/70 hover:text-white"
+        >
+          ← {copy.group.backToClass}
         </Link>
-        <div className="mt-1 flex items-start justify-between gap-2">
-          <h1 className="text-xl font-bold text-secondary">{session.displayName}</h1>
+        <div className="mt-2 flex items-start justify-between gap-2">
+          <h1 className="text-2xl font-extrabold" dir="auto">
+            {session.displayName}
+          </h1>
           {canManage ? (
             <ItemActionsMenu
               title={session.title}
@@ -107,11 +114,11 @@ export default function SessionPage() {
             />
           ) : null}
         </div>
-      </div>
+      </Hero>
 
       <div className="flex flex-wrap gap-2">
         <Button type="button" className="flex-1" onClick={() => void player.playSession(sessionId)}>
-          پخش همه
+          {copy.content.playAll}
         </Button>
         {canManage ? (
           <>
@@ -122,7 +129,7 @@ export default function SessionPage() {
               disabled={createTopic.isPending}
               onClick={() => createTopic.mutate()}
             >
-              تاپیک جدید
+              {copy.content.newTopic}
             </Button>
             <Button
               type="button"
@@ -130,20 +137,24 @@ export default function SessionPage() {
               className="flex-1"
               onClick={() => setUploadOpen(true)}
             >
-              افزودن
+              {copy.content.addFile}
             </Button>
           </>
         ) : null}
       </div>
 
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-text-muted">فایل‌های جلسه</h2>
+        <h2 className="text-sm font-semibold text-secondary">{copy.content.sessionFiles}</h2>
         {files.length === 0 && pending.length === 0 ? (
-          <EmptyState title="فایلی در این جلسه نیست" />
+          <EmptyState title={copy.content.emptySessionFiles} />
         ) : (
           <>
             {pending.map((item) => (
-              <OptimisticFileRow key={item.id} title="در حال ارسال…" progress={item.progress} />
+              <OptimisticFileRow
+                key={item.id}
+                title={copy.content.pendingUpload}
+                progress={item.progress}
+              />
             ))}
             {files.map((file) => (
               <FileRow
@@ -159,16 +170,18 @@ export default function SessionPage() {
       </section>
 
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-text-muted">تاپیک‌ها</h2>
+        <h2 className="text-sm font-semibold text-secondary">{copy.content.topics}</h2>
         {topics.length === 0 ? (
-          <EmptyState title="تاپیکی نیست" />
+          <EmptyState title={copy.content.emptyTopics} />
         ) : (
           topics.map((topic) => (
             <Card key={topic.id} className="flex items-center gap-2">
               <Link href={`/topics/${topic.id}`} className="min-w-0 flex-1">
-                <h3 className="font-semibold">{topic.displayName}</h3>
+                <h3 className="font-semibold text-text" dir="auto">
+                  {topic.displayName}
+                </h3>
                 <p className="mt-1 text-xs text-text-muted">
-                  <bdi dir="ltr">{topic.fileCount}</bdi> فایل
+                  <bdi dir="ltr">{copy.content.fileCount(topic.fileCount)}</bdi>
                 </p>
               </Link>
               {canManage ? (

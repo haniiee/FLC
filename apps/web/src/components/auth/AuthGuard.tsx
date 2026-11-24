@@ -59,10 +59,18 @@ export function AuthGuard({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (isAuthenticated && !mustChangePassword && changePasswordPath) {
-      router.replace("/");
+    if (
+      isAuthenticated &&
+      !mustChangePassword &&
+      user?.platformRole === "admin" &&
+      !adminPath &&
+      !changePasswordPath &&
+      !publicPath
+    ) {
+      router.replace("/admin/groups");
     }
   }, [
+    adminPath,
     changePasswordPath,
     isAuthenticated,
     isLoading,
@@ -71,6 +79,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     publicPath,
     router,
     searchParams,
+    user?.platformRole,
   ]);
 
   if (isLoading && !publicPath) {
@@ -90,6 +99,21 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   }
 
   if (isAuthenticated && mustChangePassword && !changePasswordPath) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <Spinner className="h-8 w-8" />
+      </div>
+    );
+  }
+
+  if (
+    isAuthenticated &&
+    !mustChangePassword &&
+    user?.platformRole === "admin" &&
+    !adminPath &&
+    !changePasswordPath &&
+    !publicPath
+  ) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <Spinner className="h-8 w-8" />

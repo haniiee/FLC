@@ -1,13 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Vazirmatn } from "next/font/google";
+import { Plus_Jakarta_Sans, Vazirmatn } from "next/font/google";
 import { Suspense } from "react";
 import { AuthGuard } from "../components/auth/AuthGuard";
-import { AppHeader } from "../components/layout/AppHeader";
-import { InstallPrompt } from "../components/pwa/InstallPrompt";
+import { AppChrome } from "../components/layout/AppChrome";
 import { Spinner } from "../components/ui/Spinner";
 import { AppProviders } from "../providers/app-providers";
 import { SerwistProvider } from "../providers/serwist-provider";
 import "./globals.css";
+
+const plusJakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-jakarta",
+  display: "swap",
+});
 
 const vazirmatn = Vazirmatn({
   subsets: ["arabic", "latin"],
@@ -18,7 +23,7 @@ const vazirmatn = Vazirmatn({
 export const metadata: Metadata = {
   title: "FLC",
   applicationName: "FLC",
-  description: "آکادمی فروغ ماه تابان",
+  description: "Forough Mah Taban Academy — FLC",
   appleWebApp: {
     capable: true,
     title: "FLC",
@@ -45,12 +50,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fa" dir="rtl" className={vazirmatn.variable}>
-      <body className={vazirmatn.className}>
+    <html lang="en" dir="ltr" className={`${plusJakarta.variable} ${vazirmatn.variable}`}>
+      <body className={`${plusJakarta.className} font-sans`}>
         <SerwistProvider>
           <AppProviders>
-            <AppHeader />
-            <main className="mx-auto min-h-[calc(100vh-64px)] w-full max-w-[720px] px-4 py-5">
+            <AppChrome>
               <Suspense
                 fallback={
                   <div className="flex min-h-[40vh] items-center justify-center">
@@ -60,8 +64,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               >
                 <AuthGuard>{children}</AuthGuard>
               </Suspense>
-            </main>
-            <InstallPrompt />
+            </AppChrome>
           </AppProviders>
         </SerwistProvider>
       </body>

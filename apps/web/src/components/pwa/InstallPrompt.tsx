@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { copy } from "../../lib/copy";
 import { Button } from "../ui/Button";
 import { Sheet } from "../ui/Sheet";
 
@@ -110,8 +111,8 @@ export function InstallPrompt() {
         <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 px-4">
           <div className="mx-auto flex max-w-[720px] items-center gap-3 rounded-xl border border-border bg-surface p-3 shadow-lg">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-secondary">نصب اپ FLC</p>
-              <p className="text-xs text-text-muted">برای دسترسی سریع‌تر و پخش بهتر در پس‌زمینه</p>
+              <p className="text-sm font-semibold text-primary">{copy.install.title}</p>
+              <p className="text-xs text-text-muted">{copy.install.body}</p>
             </div>
             <Button
               type="button"
@@ -119,28 +120,25 @@ export function InstallPrompt() {
               className="px-2 py-1 text-xs"
               onClick={closeAndroid}
             >
-              بعداً
+              {copy.install.later}
             </Button>
             <Button
               type="button"
               className="px-3 py-2 text-sm"
               onClick={() => void installAndroid()}
             >
-              نصب اپ
+              {copy.install.install}
             </Button>
           </div>
         </div>
       ) : null}
 
-      <Sheet open={showIos} onClose={closeIos} title="نصب روی گوشی">
+      <Sheet open={showIos} onClose={closeIos} title={copy.install.title}>
         <div className="space-y-3 text-sm text-text">
-          <p>برای نصب: دکمه‌ی Share ← Add to Home Screen</p>
-          <p className="text-text-muted">
-            بعد از نصب، پخش در پس‌زمینه و نوتیفیکیشن بهتر کار می‌کند و اپ مثل یک برنامه‌ی مستقل باز
-            می‌شود.
-          </p>
+          <p>{copy.install.iosHint}</p>
+          <p className="text-text-muted">{copy.install.body}</p>
           <Button type="button" className="w-full" onClick={closeIos}>
-            متوجه شدم
+            {copy.install.gotIt}
           </Button>
         </div>
       </Sheet>

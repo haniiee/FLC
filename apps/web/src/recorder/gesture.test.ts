@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { copy } from "../lib/copy";
 import {
   CANCEL_THRESHOLD_PX,
   cancelHint,
@@ -30,8 +31,8 @@ describe("isCancelGesture", () => {
 
 describe("cancelHint", () => {
   it("points toward cancel direction", () => {
-    expect(cancelHint("rtl")).toBe("برای لغو بکش →");
-    expect(cancelHint("ltr")).toBe("برای لغو بکش ←");
+    expect(cancelHint("rtl")).toBe(copy.recorder.slideCancelRtl);
+    expect(cancelHint("ltr")).toBe(copy.recorder.slideCancelLtr);
   });
 });
 
@@ -56,7 +57,7 @@ describe("reduceGesture", () => {
     const { state, effects } = reduceGesture(requesting, { type: "permission-granted" });
     expect(state.ui).toBe("idle");
     expect(state.hasPermission).toBe(true);
-    expect(effects).toContainEqual({ type: "toast", message: "حالا دوباره نگه دار" });
+    expect(effects).toContainEqual({ type: "toast", message: copy.recorder.holdAgain });
   });
 
   it("discards recordings shorter than 1s", () => {
@@ -70,7 +71,7 @@ describe("reduceGesture", () => {
     expect(effects.some((e) => e.type === "stop-and-discard")).toBe(true);
     expect(effects).toContainEqual({
       type: "toast",
-      message: "برای ضبط، دکمه رو نگه دار",
+      message: copy.recorder.holdToRecordHint,
     });
   });
 

@@ -11,10 +11,14 @@ import { canManageContent } from "../../../components/files/FileRow";
 import { Button } from "../../../components/ui/Button";
 import { Card } from "../../../components/ui/Card";
 import { EmptyState } from "../../../components/ui/EmptyState";
+import { Hero } from "../../../components/ui/Hero";
 import { Sheet } from "../../../components/ui/Sheet";
 import { Spinner } from "../../../components/ui/Spinner";
+import { channelTitle } from "../../../chat/cache";
 import { getApiClient } from "../../../lib/api";
+import { copy } from "../../../lib/copy";
 import { apiErrorMessage, roleLabel } from "../../../lib/format";
+
 export default function GroupPage() {
   const params = useParams<{ groupId: string }>();
   const groupId = params.groupId;
@@ -52,7 +56,7 @@ export default function GroupPage() {
     mutationFn: () => getApiClient().createSession(groupId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["sessions", groupId] });
-      toast.success("جلسه ساخته شد");
+      toast.success(copy.group.sessionCreated);
     },
     onError: (error) => toast.error(apiErrorMessage(error)),
   });
@@ -78,52 +82,61 @@ export default function GroupPage() {
   }
 
   if (!groupQuery.data) {
-    return <EmptyState title="کلاس پیدا نشد" />;
+    return <EmptyState title={copy.group.notFound} />;
   }
 
   const group = groupQuery.data;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <Link href="/" className="text-xs text-text-muted">
-            → بازگشت
-          </Link>
-          <h1 className="mt-1 text-xl font-bold text-secondary">{group.name}</h1>
-          <p className="text-sm text-text-muted">نقش شما: {roleLabel(group.myRole)}</p>
-        </div>
+      <Hero>
+        <Link href="/" className="text-xs font-medium text-white/70 hover:text-white">
+          ← {copy.common.back}
+        </Link>
+        <h1 className="mt-2 text-2xl font-extrabold" dir="auto">
+          {group.name}
+        </h1>
+        <p className="mt-1 text-sm text-white/80">
+          {copy.group.yourRole}: {roleLabel(group.myRole)}
+        </p>
         {canManage ? (
-          <Button type="button" variant="secondary" onClick={() => createInvite.mutate()}>
-            لینک دعوت
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-4 border-white/30 bg-white/10 text-white hover:bg-white/20"
+            onClick={() => createInvite.mutate()}
+          >
+            {copy.group.invite}
           </Button>
         ) : null}
-      </div>
+      </Hero>
 
       <div className="flex flex-wrap gap-2">
         {(chatsQuery.data?.channels ?? []).map((channel) => (
           <Link
             key={channel.id}
             href={`/groups/${groupId}/chat/${channel.id}`}
-            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-secondary"
+            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm font-semibold text-secondary shadow-card transition hover:border-secondary/40"
           >
-            {channel.kind === "all" ? "چت کلاس" : "چت دانشجوها"}
+            {channelTitle(channel.kind)}
           </Link>
         ))}
       </div>
 
-      <div className="flex gap-2 rounded-lg bg-surface p-1">
+      <div className="flex gap-2 rounded-lg border border-border bg-surface p-1 shadow-card">
         {(
           [
-            ["sessions", "جلسه‌ها"],
-            ["members", "اعضا"],
+            ["sessions", copy.group.sessions],
+            ["members", copy.group.members],
           ] as const
         ).map(([key, label]) => (
           <button
             key={key}
             type="button"
-            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium ${
-              tab === key ? "bg-secondary text-white" : "text-text-muted"
+            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
+              tab === key
+                ? "bg-secondary text-white shadow-card"
+                : "text-text-muted hover:text-text"
             }`}
             onClick={() => setTab(key)}
           >
@@ -141,19 +154,25 @@ export default function GroupPage() {
               disabled={createSession.isPending}
               onClick={() => createSession.mutate()}
             >
-              جلسه‌ی جدید
+              {copy.group.newSession}
             </Button>
           ) : null}
           {(sessionsQuery.data?.sessions ?? []).length === 0 ? (
-            <EmptyState title="هنوز جلسه‌ای نیست" />
+            <EmptyState
+              title={canManage ? copy.group.emptySessionsTeacher : copy.group.emptySessionsStudent}
+              description={copy.group.emptySessionsSubtitle}
+            />
           ) : (
             (sessionsQuery.data?.sessions ?? []).map((session) => (
               <Card key={session.id} className="flex items-center gap-2">
                 <Link href={`/sessions/${session.id}`} className="min-w-0 flex-1">
-                  <h2 className="font-semibold text-text">{session.displayName}</h2>
+                  <h2 className="font-semibold text-text" dir="auto">
+                    {session.displayName}
+                  </h2>
                   <p className="mt-1 text-xs text-text-muted">
-                    <bdi dir="ltr">{session.topicCount}</bdi> تاپیک ·{" "}
-                    <bdi dir="ltr">{session.fileCount}</bdi> فایل
+                    <bdi dir="ltr">
+                      {copy.group.sessionStats(session.topicCount, session.fileCount)}
+                    </bdi>
                   </p>
                 </Link>
                 {canManage ? (
@@ -184,10 +203,17 @@ export default function GroupPage() {
               <Card key={member.id} className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <div>
-                    <p className="font-medium">{member.displayName}</p>
+                    <p className="font-medium text-text" dir="auto">
+                      {member.displayName}
+                    </p>
                     <p className="text-xs text-text-muted">
                       {roleLabel(member.role)}
-                      {member.phone ? ` · ${member.phone}` : ""}
+                      {member.phone ? (
+                        <>
+                          {" · "}
+                          <bdi dir="ltr">{member.phone}</bdi>
+                        </>
+                      ) : null}
                     </p>
                   </div>
                 </div>
@@ -206,7 +232,7 @@ export default function GroupPage() {
                               await queryClient.invalidateQueries({
                                 queryKey: ["members", groupId],
                               });
-                              toast.success("نقش به‌روزرسانی شد");
+                              toast.success(copy.group.roleUpdated);
                             } catch (error) {
                               toast.error(apiErrorMessage(error));
                             }
@@ -225,14 +251,14 @@ export default function GroupPage() {
                           try {
                             await getApiClient().removeMember(groupId, member.id);
                             await queryClient.invalidateQueries({ queryKey: ["members", groupId] });
-                            toast.success("عضو حذف شد");
+                            toast.success(copy.group.memberRemoved);
                           } catch (error) {
                             toast.error(apiErrorMessage(error));
                           }
                         })();
                       }}
                     >
-                      حذف
+                      {copy.group.remove}
                     </Button>
                   </div>
                 ) : null}
@@ -246,14 +272,14 @@ export default function GroupPage() {
                         try {
                           await getApiClient().removeMember(groupId, member.id);
                           await queryClient.invalidateQueries({ queryKey: ["members", groupId] });
-                          toast.success("شاگرد حذف شد");
+                          toast.success(copy.group.studentRemoved);
                         } catch (error) {
                           toast.error(apiErrorMessage(error));
                         }
                       })();
                     }}
                   >
-                    حذف شاگرد
+                    {copy.group.removeStudent}
                   </Button>
                 ) : null}
               </Card>
@@ -262,20 +288,24 @@ export default function GroupPage() {
         </div>
       ) : null}
 
-      <Sheet open={inviteOpen} onClose={() => setInviteOpen(false)} title="لینک دعوت">
+      <Sheet open={inviteOpen} onClose={() => setInviteOpen(false)} title={copy.group.invite}>
         <div className="space-y-3">
-          <p className="text-sm text-text-muted">کد: {inviteCode}</p>
-          <p className="break-all rounded-md bg-surface p-3 text-sm">{inviteUrl}</p>
+          <p className="text-sm text-text-muted">
+            {copy.group.inviteCodeLabel}: <bdi dir="ltr">{inviteCode}</bdi>
+          </p>
+          <p className="break-all rounded-md border border-border bg-surface-muted/50 p-3 text-sm">
+            {inviteUrl}
+          </p>
           <div className="flex gap-2">
             <Button
               type="button"
               className="flex-1"
               onClick={() => {
                 void navigator.clipboard.writeText(inviteUrl);
-                toast.success("لینک کپی شد");
+                toast.success(copy.group.inviteCopied);
               }}
             >
-              کپی لینک
+              {copy.group.copyLink}
             </Button>
             {"share" in navigator ? (
               <Button
@@ -283,10 +313,10 @@ export default function GroupPage() {
                 variant="secondary"
                 className="flex-1"
                 onClick={() => {
-                  void navigator.share({ title: "دعوت به کلاس FLC", url: inviteUrl });
+                  void navigator.share({ title: copy.group.inviteShareTitle, url: inviteUrl });
                 }}
               >
-                اشتراک‌گذاری
+                {copy.group.share}
               </Button>
             ) : null}
           </div>

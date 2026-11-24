@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { ClientChatMessage } from "../../chat/cache";
-import { formatDuration, apiErrorMessage } from "../../lib/format";
 import { getApiClient } from "../../lib/api";
+import { copy } from "../../lib/copy";
+import { apiErrorMessage, formatDuration } from "../../lib/format";
 import { usePlayer } from "../../player/context";
 import { usePlayerStore, selectCurrentItem } from "../../player/store";
 
@@ -41,7 +42,7 @@ export function VoiceMessageBubble({ message }: { message: ClientChatMessage }) 
         durationMs: message.durationMs,
       });
     } catch (error) {
-      toast.error(apiErrorMessage(error, "پخش ناموفق بود"));
+      toast.error(apiErrorMessage(error, copy.chat.playFailed));
     } finally {
       setLoading(false);
     }
@@ -52,15 +53,15 @@ export function VoiceMessageBubble({ message }: { message: ClientChatMessage }) 
   }, [isCurrent, position]);
 
   if (message.status === "processing") {
-    return <p className="text-sm text-text-muted">در حال پردازش…</p>;
+    return <p className="text-sm text-text-muted">{copy.chat.processing}</p>;
   }
   if (message.status === "failed") {
-    return <p className="text-sm text-danger">خطا</p>;
+    return <p className="text-sm text-danger">{copy.content.errorLabel}</p>;
   }
   if (typeof message.uploadProgress === "number" && message.uploadProgress < 1) {
     return (
       <p className="text-sm text-text-muted">
-        در حال ارسال… <bdi dir="ltr">{Math.round(message.uploadProgress * 100)}%</bdi>
+        {copy.chat.sending} <bdi dir="ltr">{Math.round(message.uploadProgress * 100)}%</bdi>
       </p>
     );
   }
@@ -69,15 +70,15 @@ export function VoiceMessageBubble({ message }: { message: ClientChatMessage }) 
     <div className="flex min-w-[12rem] items-center gap-2">
       <button
         type="button"
-        aria-label={isCurrent && isPlaying ? "توقف" : "پخش"}
+        aria-label={isCurrent && isPlaying ? copy.player.pause : copy.player.play}
         disabled={loading || message.deleted}
         onClick={() => void onToggle()}
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-sm text-white disabled:opacity-50"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-sm text-white shadow-card disabled:opacity-50"
       >
         {isCurrent && isPlaying ? "❚❚" : "▶"}
       </button>
       <div className="min-w-0 flex-1">
-        <div className="h-1.5 overflow-hidden rounded-full bg-black/10">
+        <div className="h-1.5 overflow-hidden rounded-full bg-border">
           <div
             className="h-full rounded-full bg-secondary transition-[width]"
             style={{ width: `${Math.min(100, Math.max(0, progress * 100))}%` }}

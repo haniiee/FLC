@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { copy } from "../../lib/copy";
 
 export function Spinner({ className }: { className?: string }) {
   return (
@@ -7,7 +8,8 @@ export function Spinner({ className }: { className?: string }) {
         "inline-block h-5 w-5 animate-spin rounded-full border-2 border-border border-t-secondary",
         className,
       )}
-      aria-label="در حال بارگذاری"
+      role="status"
+      aria-label={copy.common.loading}
     />
   );
 }

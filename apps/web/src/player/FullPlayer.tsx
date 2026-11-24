@@ -1,14 +1,28 @@
 "use client";
 
-import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { AddToPlaylistModal } from "../components/playlists/AddToPlaylistModal";
 import { Button } from "../components/ui/Button";
+import { Input } from "../components/ui/Input";
+import { Modal } from "../components/ui/Modal";
+import { getApiClient } from "../lib/api";
+import { bookmarksQueryKey, formatBookmarkClock } from "../lib/bookmark-logic";
+import { copy } from "../lib/copy";
+import { apiErrorMessage } from "../lib/format";
 import { usePlayer } from "./context";
 import { formatClock } from "./format-time";
 import { selectCurrentItem, usePlayerStore } from "./store";
 import { PLAYBACK_RATES } from "./types";
 
 function RepeatButton({ mode, onClick }: { mode: "off" | "all" | "one"; onClick: () => void }) {
-  const label = mode === "off" ? "تکرار خاموش" : mode === "all" ? "تکرار همه" : "تکرار یکی";
+  const label =
+    mode === "off"
+      ? copy.player.repeatOff
+      : mode === "all"
+        ? copy.player.repeatAll
+        : copy.player.repeatOne;
   return (
     <button
       type="button"
@@ -33,6 +47,11 @@ function RepeatButton({ mode, onClick }: { mode: "off" | "all" | "one"; onClick:
 
 export function FullPlayer() {
   const player = usePlayer();
+  const queryClient = useQueryClient();
+  const [playlistOpen, setPlaylistOpen] = useState(false);
+  const [bookmarkOpen, setBookmarkOpen] = useState(false);
+  const [bookmarkNote, setBookmarkNote] = useState("");
+  const [bookmarkBusy, setBookmarkBusy] = useState(false);
   const open = usePlayerStore((s) => s.fullPlayerOpen);
   const queue = usePlayerStore((s) => s.queue);
   const currentIndex = usePlayerStore((s) => s.currentIndex);
@@ -67,7 +86,7 @@ export function FullPlayer() {
   const progressMax = duration > 0 ? duration : 1;
 
   return (
-    <div className="fixed inset-0 z-50 bg-secondary text-on-primary">
+    <div className="fixed inset-0 z-50 bg-hero-navy text-white">
       <div className="mx-auto flex h-full max-w-[720px] flex-col px-4 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
         <div className="flex items-center justify-between py-3">
           <button
@@ -75,9 +94,11 @@ export function FullPlayer() {
             className="rounded-md px-2 py-1 text-sm text-white/80 hover:bg-white/10"
             onClick={() => player.closeFullPlayer()}
           >
-            بستن
+            {copy.common.close}
           </button>
-          <p className="text-xs text-white/70">{current.groupDisplayName}</p>
+          <p className="text-xs text-white/70" dir="auto">
+            {current.groupDisplayName}
+          </p>
           <span className="w-12" />
         </div>
 
@@ -87,16 +108,18 @@ export function FullPlayer() {
             alt=""
             width={160}
             height={160}
-            className="h-40 w-40 rounded-2xl bg-white/10 object-contain p-4"
+            className="h-40 w-40 rounded-xl border border-white/10 bg-white/10 object-contain p-4 shadow-card"
           />
           <div className="w-full text-center">
-            <h2 className="text-xl font-bold text-white">{current.displayName}</h2>
-            <p className="mt-1 text-sm text-white/70">
+            <h2 className="text-xl font-bold text-white" dir="auto">
+              {current.displayName}
+            </h2>
+            <p className="mt-1 text-sm text-white/70" dir="auto">
               {current.topicDisplayName || current.sessionDisplayName}
             </p>
           </div>
 
-          <div className="w-full space-y-4" dir="ltr">
+          <div className="w-full space-y-4">
             <div className="w-full space-y-2">
               <input
                 type="range"
@@ -106,7 +129,7 @@ export function FullPlayer() {
                 value={Math.min(position, progressMax)}
                 onChange={(event) => player.seek(Number(event.target.value))}
                 className="h-1.5 w-full cursor-pointer accent-primary"
-                aria-label="جابجایی در ویس"
+                aria-label={copy.player.seek}
               />
               <div className="flex justify-between text-xs text-white/70">
                 <span>{formatClock(position)}</span>
@@ -117,7 +140,7 @@ export function FullPlayer() {
             <div className="flex items-center justify-center gap-3">
               <button
                 type="button"
-                aria-label="قبلی"
+                aria-label={copy.player.previous}
                 className="flex h-11 w-11 items-center justify-center rounded-full text-xl text-white hover:bg-white/10"
                 onClick={() => player.prev()}
               >
@@ -125,36 +148,58 @@ export function FullPlayer() {
               </button>
               <button
                 type="button"
-                aria-label="۱۵ ثانیه عقب"
+                aria-label={copy.player.skipBack10}
                 className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold text-white hover:bg-white/10"
-                onClick={() => player.skip(-15)}
+                onClick={() => player.skip(-10)}
               >
-                −15
+                −10
               </button>
               <button
                 type="button"
-                aria-label={isPlaying ? "توقف" : "پخش"}
-                className="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-2xl text-on-primary shadow-lg"
+                aria-label={isPlaying ? copy.player.pause : copy.player.play}
+                className="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-2xl text-on-primary shadow-card"
                 onClick={() => player.toggle()}
               >
                 {isPlaying ? "❚❚" : "▶"}
               </button>
               <button
                 type="button"
-                aria-label="۱۵ ثانیه جلو"
+                aria-label={copy.player.skipForward10}
                 className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold text-white hover:bg-white/10"
-                onClick={() => player.skip(15)}
+                onClick={() => player.skip(10)}
               >
-                +15
+                +10
               </button>
               <button
                 type="button"
-                aria-label="بعدی"
+                aria-label={copy.player.next}
                 className="flex h-11 w-11 items-center justify-center rounded-full text-xl text-white hover:bg-white/10"
                 onClick={() => player.next()}
               >
                 ⏭
               </button>
+            </div>
+
+            <div className="flex w-full flex-wrap items-center justify-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-xs text-white/85 hover:bg-white/10"
+                onClick={() => setPlaylistOpen(true)}
+              >
+                {copy.player.addToPlaylist}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-xs text-white/85 hover:bg-white/10"
+                onClick={() => {
+                  setBookmarkNote("");
+                  setBookmarkOpen(true);
+                }}
+              >
+                {copy.player.bookmarkMoment}
+              </Button>
             </div>
 
             <div className="flex w-full items-center justify-between gap-3">
@@ -177,8 +222,10 @@ export function FullPlayer() {
           </div>
         </div>
 
-        <div className="max-h-[28vh] overflow-y-auto border-t border-white/10 py-3">
-          <p className="mb-2 text-xs text-white/60">صف پخش</p>
+        <div className="max-h-[28vh] overflow-y-auto rounded-t-xl border-t border-white/10 py-3">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-white/60">
+            {copy.player.queue}
+          </p>
           <ul className="space-y-1">
             {queue.map((item, index) => {
               const active = index === currentIndex;
@@ -187,12 +234,14 @@ export function FullPlayer() {
                   <Button
                     type="button"
                     variant="ghost"
-                    className={`w-full justify-start px-3 py-2 text-right text-sm ${
+                    className={`w-full justify-start px-3 py-2 text-start text-sm ${
                       active ? "bg-primary/20 text-primary" : "text-white/85 hover:bg-white/10"
                     }`}
                     onClick={() => player.jumpTo(index)}
                   >
-                    <span className="truncate">{item.displayName}</span>
+                    <span className="truncate" dir="auto">
+                      {item.displayName}
+                    </span>
                   </Button>
                 </li>
               );
@@ -200,6 +249,55 @@ export function FullPlayer() {
           </ul>
         </div>
       </div>
+
+      <AddToPlaylistModal
+        open={playlistOpen}
+        onClose={() => setPlaylistOpen(false)}
+        fileIds={current.fileId ? [current.fileId] : []}
+      />
+
+      <Modal
+        open={bookmarkOpen}
+        onClose={() => setBookmarkOpen(false)}
+        title={copy.player.bookmarkMoment}
+      >
+        <form
+          className="space-y-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void (async () => {
+              setBookmarkBusy(true);
+              try {
+                const note = bookmarkNote.trim();
+                await getApiClient().bookmarks.create({
+                  fileId: current.fileId,
+                  positionMs: Math.round(position * 1000),
+                  note: note.length > 0 ? note : null,
+                });
+                await queryClient.invalidateQueries({ queryKey: bookmarksQueryKey });
+                toast.success(
+                  copy.library.bookmarkedAt(formatBookmarkClock(Math.round(position * 1000))),
+                );
+                setBookmarkOpen(false);
+              } catch (error) {
+                toast.error(apiErrorMessage(error));
+              } finally {
+                setBookmarkBusy(false);
+              }
+            })();
+          }}
+        >
+          <Input
+            label={copy.library.note}
+            placeholder={copy.library.notePlaceholder}
+            value={bookmarkNote}
+            onChange={(event) => setBookmarkNote(event.target.value)}
+          />
+          <Button type="submit" className="w-full" disabled={bookmarkBusy}>
+            {copy.library.save}
+          </Button>
+        </form>
+      </Modal>
     </div>
   );
 }

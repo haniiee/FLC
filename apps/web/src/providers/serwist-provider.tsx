@@ -2,6 +2,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import { toast } from "sonner";
+import { copy } from "../lib/copy";
 
 export function SerwistProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -19,9 +20,9 @@ export function SerwistProvider({ children }: { children: ReactNode }) {
       }
       worker.addEventListener("statechange", () => {
         if (worker.state === "installed" && navigator.serviceWorker.controller) {
-          toast("نسخه‌ی جدید آماده‌ست — بارگذاری مجدد", {
+          toast(copy.pwa.updateReady, {
             action: {
-              label: "بارگذاری",
+              label: copy.pwa.reload,
               onClick: () => window.location.reload(),
             },
             duration: 12_000,
@@ -35,7 +36,6 @@ export function SerwistProvider({ children }: { children: ReactNode }) {
         return;
       }
       registration.addEventListener("updatefound", () => onUpdateFound(registration));
-      // In case an update is already installing
       if (registration.installing) {
         onUpdateFound(registration);
       }
