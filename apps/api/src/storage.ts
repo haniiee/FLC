@@ -12,6 +12,14 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { FileKind } from "@app/shared-types";
 import { env } from "./env";
 import { badRequest, payloadTooLarge } from "./lib/errors";
+import {
+  createSupabaseDownloadUrl,
+  createSupabaseUploadUrl,
+  supabaseDeleteKeys,
+  supabaseDownloadObjectStream,
+  supabaseHeadObject,
+  supabasePutObjectFromFile,
+} from "./storage-supabase";
 
 function createS3Client(endpoint: string) {
   return new S3Client({
@@ -19,21 +27,32 @@ function createS3Client(endpoint: string) {
     region: env.S3_REGION,
     forcePathStyle: true,
     credentials: {
-      accessKeyId: env.S3_ACCESS_KEY,
-      secretAccessKey: env.S3_SECRET_KEY,
+      accessKeyId: env.S3_ACCESS_KEY!,
+      secretAccessKey: env.S3_SECRET_KEY!,
     },
   });
 }
 
+const usingSupabase = env.STORAGE_DRIVER === "supabase";
+
 /** Internal client for Head/Delete (docker network / server-side). */
-export const s3 = createS3Client(env.S3_ENDPOINT);
+export const s3 = usingSupabase ? null : createS3Client(env.S3_ENDPOINT!);
 
 /** Public client used only for presigned URLs (browser/mobile reachable). */
-export const s3Public = createS3Client(env.S3_PUBLIC_ENDPOINT);
+export const s3Public = usingSupabase ? null : createS3Client(env.S3_PUBLIC_ENDPOINT!);
 
 export async function checkStorage(): Promise<"ok" | "down"> {
   try {
-    await s3.send(new HeadBucketCommand({ Bucket: env.S3_BUCKET }));
+    if (usingSupabase) {
+      const res = await fetch(`${env.SUPABASE_URL!.replace(/\/$/, "")}/storage/v1/bucket/${env.S3_BUCKET}`, {
+        headers: {
+          Authorization: `Bearer ${env.SUPABASE_ANON_KEY!}`,
+          apikey: env.SUPABASE_ANON_KEY!,
+        },
+      });
+      return res.ok ? "ok" : "down";
+    }
+    await s3!.send(new HeadBucketCommand({ Bucket: env.S3_BUCKET }));
     return "ok";
   } catch {
     return "down";
@@ -166,18 +185,24 @@ export function assertChatVoiceAllowed(mimeType: string, sizeBytes: number): voi
 }
 
 export async function createUploadUrl(key: string, mimeType: string, expiresIn = 900) {
+  if (usingSupabase) {
+    return createSupabaseUploadUrl(key, mimeType, expiresIn);
+  }
   const command = new PutObjectCommand({
     Bucket: env.S3_BUCKET,
     Key: key,
     ContentType: mimeType,
   });
-  return getSignedUrl(s3Public, command, { expiresIn });
+  return getSignedUrl(s3Public!, command, { expiresIn });
 }
 
 export async function createDownloadUrl(
   key: string,
   options?: { expiresIn?: number; fileName?: string; download?: boolean },
 ) {
+  if (usingSupabase) {
+    return createSupabaseDownloadUrl(key, options);
+  }
   const command = new GetObjectCommand({
     Bucket: env.S3_BUCKET,
     Key: key,
@@ -187,7 +212,7 @@ export async function createDownloadUrl(
         }
       : {}),
   });
-  return getSignedUrl(s3Public, command, { expiresIn: options?.expiresIn ?? 3600 });
+  return getSignedUrl(s3Public!, command, { expiresIn: options?.expiresIn ?? 3600 });
 }
 
 /** Presigned URL used by session playlists and personal playlists. */
@@ -196,7 +221,10 @@ export function createPlaylistFileUrl(storageKey: string) {
 }
 
 export async function headObject(key: string) {
-  return s3.send(
+  if (usingSupabase) {
+    return supabaseHeadObject(key);
+  }
+  return s3!.send(
     new HeadObjectCommand({
       Bucket: env.S3_BUCKET,
       Key: key,
@@ -205,7 +233,10 @@ export async function headObject(key: string) {
 }
 
 export async function downloadObjectStream(key: string) {
-  const result = await s3.send(
+  if (usingSupabase) {
+    return supabaseDownloadObjectStream(key);
+  }
+  const result = await s3!.send(
     new GetObjectCommand({
       Bucket: env.S3_BUCKET,
       Key: key,
@@ -215,10 +246,13 @@ export async function downloadObjectStream(key: string) {
 }
 
 export async function putObjectFromFile(key: string, filePath: string, contentType: string) {
+  if (usingSupabase) {
+    return supabasePutObjectFromFile(key, filePath, contentType);
+  }
   const { createReadStream } = await import("node:fs");
   const { stat } = await import("node:fs/promises");
   const fileStat = await stat(filePath);
-  await s3.send(
+  await s3!.send(
     new PutObjectCommand({
       Bucket: env.S3_BUCKET,
       Key: key,
@@ -235,9 +269,18 @@ export async function deleteStorageKeys(keys: string[]): Promise<void> {
     return;
   }
 
+  if (usingSupabase) {
+    try {
+      await supabaseDeleteKeys(unique);
+    } catch (error) {
+      console.error("Failed to delete Supabase objects", error);
+    }
+    return;
+  }
+
   const objects: ObjectIdentifier[] = unique.map((Key) => ({ Key }));
   try {
-    await s3.send(
+    await s3!.send(
       new DeleteObjectsCommand({
         Bucket: env.S3_BUCKET,
         Delete: { Objects: objects, Quiet: true },
@@ -249,8 +292,12 @@ export async function deleteStorageKeys(keys: string[]): Promise<void> {
 }
 
 export async function applyBucketCors(origin = env.WEB_URL): Promise<void> {
+  if (usingSupabase) {
+    console.log("STORAGE_DRIVER=supabase: bucket CORS is managed by Supabase (skipped)");
+    return;
+  }
   try {
-    await s3.send(
+    await s3!.send(
       new PutBucketCorsCommand({
         Bucket: env.S3_BUCKET,
         CORSConfiguration: {

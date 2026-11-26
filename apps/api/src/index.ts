@@ -15,7 +15,8 @@ try {
     );
   }
 
-  await app.listen({ port: env.API_PORT, host: "0.0.0.0" });
+  const port = env.PORT ?? env.API_PORT;
+  await app.listen({ port, host: "0.0.0.0" });
   void recoverProcessingAudio().catch((error) => {
     app.log.error(error, "failed to recover processing audio");
   });

@@ -1,0 +1,17 @@
+node_modules
+**/node_modules
+.git
+.turbo
+**/.next
+**/dist
+**/.expo
+apps/mobile
+apps/web
+*.md
+.playwright-mcp
+coverage
+.env
+.env.*
+apps/web/public/downloads
+apps/web/public/frames
+apps/web/public/video

@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: flc-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: STORAGE_DRIVER
+        value: supabase
+      - key: S3_BUCKET
+        value: class-files
+      - key: S3_REGION
+        value: eu-central-1
+      - key: FFMPEG_PATH
+        value: ffmpeg
+      - key: FFPROBE_PATH
+        value: ffprobe
+      - key: WEB_URL
+        sync: false
+      - key: API_PUBLIC_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false

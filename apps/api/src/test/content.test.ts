@@ -483,7 +483,7 @@ describe("sessions topics files", () => {
     expect(remainingFiles).toHaveLength(0);
 
     // best-effort: object should be gone (or missing)
-    const listed = await s3.send(
+    const listed = await s3!.send(
       new ListObjectsV2Command({
         Bucket: env.S3_BUCKET,
         Prefix: key,
@@ -493,7 +493,7 @@ describe("sessions topics files", () => {
 
     // cleanup safety
     try {
-      await s3.send(new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: key }));
+      await s3!.send(new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: key }));
     } catch {
       // ignore
     }

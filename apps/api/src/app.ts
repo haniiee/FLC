@@ -22,6 +22,7 @@ import { healthRoutes } from "./routes/health";
 import { inviteRoutes } from "./routes/invites";
 import { bookmarkRoutes } from "./routes/bookmarks";
 import { playlistRoutes } from "./routes/playlists";
+import { storageProxyRoutes } from "./routes/storage-proxy";
 
 export async function buildApp(options?: { logger?: boolean }): Promise<FastifyInstance> {
   const app = Fastify({
@@ -104,6 +105,9 @@ export async function buildApp(options?: { logger?: boolean }): Promise<FastifyI
   });
 
   await app.register(healthRoutes);
+  if (env.STORAGE_DRIVER === "supabase") {
+    await app.register(storageProxyRoutes);
+  }
   await app.register(authRoutes);
   await app.register(adminRoutes);
   await app.register(groupRoutes);

@@ -12,6 +12,7 @@ if (!testUrl) {
 process.env.DATABASE_URL = testUrl;
 process.env.JWT_SECRET ??= "test-jwt-secret-flc-123456";
 process.env.WEB_URL ??= "http://localhost:3000";
+process.env.STORAGE_DRIVER ??= "s3";
 process.env.S3_ENDPOINT ??= "http://localhost:9000";
 process.env.S3_PUBLIC_ENDPOINT ??= process.env.S3_ENDPOINT;
 process.env.S3_REGION ??= "us-east-1";
