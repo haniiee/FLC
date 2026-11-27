@@ -87,7 +87,9 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 }
 
 const SCRUB_RESUME_MS = 700;
-const DEFAULT_SOUNDTRACK = "/video/aida.mp4";
+const DEFAULT_SOUNDTRACK =
+  process.env.NEXT_PUBLIC_LANDING_AUDIO_URL ??
+  "https://gegmzokhmbxwjonyqmmz.supabase.co/storage/v1/object/public/landing/aida.mp4";
 
 export function FrameSequence({
   children,
