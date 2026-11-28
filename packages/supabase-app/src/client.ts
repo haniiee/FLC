@@ -108,6 +108,8 @@ export type CreateSupabaseApiClientOptions = {
   supabase?: SupabaseClient;
   /** Base URL for Next.js admin routes that need the service role. */
   adminApiBaseUrl?: string;
+  /** Public web origin for invite links (e.g. https://flc-landing.vercel.app). */
+  webOrigin?: string;
 };
 
 export function createSupabaseApiClient(options: CreateSupabaseApiClientOptions): ApiClient {
@@ -122,6 +124,11 @@ export function createSupabaseApiClient(options: CreateSupabaseApiClientOptions)
     });
 
   const adminBase = (options.adminApiBaseUrl ?? "").replace(/\/$/, "");
+  const webOrigin = (
+    options.webOrigin ||
+    (typeof window !== "undefined" ? window.location.origin : "") ||
+    "https://flc-landing.vercel.app"
+  ).replace(/\/$/, "");
 
   async function currentUserId() {
     const { data } = await supabase.auth.getUser();
@@ -179,7 +186,7 @@ export function createSupabaseApiClient(options: CreateSupabaseApiClientOptions)
     return {
       id: row.id,
       code: row.code,
-      url: `https://localhost/join/${row.code}`,
+      url: `${webOrigin}/join/${row.code}`,
       expiresAt: row.expires_at ? iso(row.expires_at) : null,
       maxUses: row.max_uses,
       uses: row.uses,
