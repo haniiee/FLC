@@ -72,7 +72,10 @@ export async function POST(request: Request, context: { params: Promise<{ groupI
     });
   }
   if (!userId) {
-    return Response.json({ error: { code: "BAD_REQUEST", message: "userId required" } }, { status: 400 });
+    return Response.json(
+      { error: { code: "BAD_REQUEST", message: "userId required" } },
+      { status: 400 },
+    );
   }
   await admin.from("group_members").upsert({
     group_id: groupId,

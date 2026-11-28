@@ -60,33 +60,29 @@ function ensureRealtime() {
   const client = getSupabase();
   realtimeChannel = client
     .channel("chat-messages")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "chat_messages" },
-      (payload) => {
-        const row = (payload.new || payload.old) as Record<string, unknown> | undefined;
-        if (!row?.channel_id) return;
-        const channelId = String(row.channel_id);
-        if (!activeChannels.has(channelId)) return;
-        const handlers = channelHandlers.get(channelId);
-        if (!handlers) return;
-        // Payload rows lack joined sender/role — resync from API for correct ChatMessage DTOs.
-        if (payload.eventType === "DELETE" && payload.old) {
-          for (const h of handlers) {
-            h.onDeleted?.({ id: String((payload.old as { id: string }).id), channelId });
-          }
-        } else if (payload.eventType === "UPDATE" && payload.new) {
-          const message = mapRow(payload.new as Record<string, unknown>);
-          if (message.deleted) {
-            for (const h of handlers) h.onDeleted?.({ id: message.id, channelId });
-          } else {
-            for (const h of handlers) h.onResync?.();
-          }
+    .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, (payload) => {
+      const row = (payload.new || payload.old) as Record<string, unknown> | undefined;
+      if (!row?.channel_id) return;
+      const channelId = String(row.channel_id);
+      if (!activeChannels.has(channelId)) return;
+      const handlers = channelHandlers.get(channelId);
+      if (!handlers) return;
+      // Payload rows lack joined sender/role — resync from API for correct ChatMessage DTOs.
+      if (payload.eventType === "DELETE" && payload.old) {
+        for (const h of handlers) {
+          h.onDeleted?.({ id: String((payload.old as { id: string }).id), channelId });
+        }
+      } else if (payload.eventType === "UPDATE" && payload.new) {
+        const message = mapRow(payload.new as Record<string, unknown>);
+        if (message.deleted) {
+          for (const h of handlers) h.onDeleted?.({ id: message.id, channelId });
         } else {
           for (const h of handlers) h.onResync?.();
         }
-      },
-    )
+      } else {
+        for (const h of handlers) h.onResync?.();
+      }
+    })
     .subscribe((status) => {
       emitStatus(status === "SUBSCRIBED");
     });
