@@ -171,6 +171,7 @@ export function FrameSequence({
     node.defaultMuted = true;
     node.muted = true;
     node.playsInline = true;
+    node.setAttribute("fetchpriority", "high");
   }, []);
 
   const showVisual = useCallback((next: HeroVisual) => {
@@ -692,7 +693,6 @@ export function FrameSequence({
               playsInline
               loop
               preload="auto"
-              fetchPriority="high"
               aria-hidden
             />
             <img
