@@ -101,9 +101,27 @@ function waitForMedia(video: HTMLVideoElement, ms: number): Promise<void> {
 }
 
 const SCRUB_RESUME_MS = 700;
-const DEFAULT_SOUNDTRACK =
-  process.env.NEXT_PUBLIC_LANDING_AUDIO_URL ??
-  "https://gegmzokhmbxwjonyqmmz.supabase.co/storage/v1/object/public/landing/aida.mp4";
+/** Fast-start file. The previous upload had ~1MB of empty padding before the first frame. */
+const HERO_VIDEO_URL =
+  "https://gegmzokhmbxwjonyqmmz.supabase.co/storage/v1/object/public/landing/aida-fast.mp4";
+/** Don't reveal the moving picture until this much is buffered. Otherwise a cold cache stutters. */
+const START_BUFFER_SEC = 2;
+
+type HeroVisual = "poster" | "video" | "frames";
+
+function bufferedAhead(video: HTMLVideoElement): number {
+  const time = video.currentTime || 0;
+  for (let i = 0; i < video.buffered.length; i += 1) {
+    const start = video.buffered.start(i);
+    const end = video.buffered.end(i);
+    if (time >= start - 0.05 && time <= end + 0.001) return Math.max(0, end - time);
+  }
+  return 0;
+}
+
+function canStartSmooth(video: HTMLVideoElement): boolean {
+  return bufferedAhead(video) >= START_BUFFER_SEC;
+}
 
 export function FrameSequence({
   children,
@@ -133,9 +151,10 @@ export function FrameSequence({
   const soundUnlockedRef = useRef(false);
   const videoFailedRef = useRef(false);
   const mutedRef = useRef(false);
-  const visualRef = useRef<"video" | "frames">("video");
+  const visualRef = useRef<HeroVisual>("poster");
+  const primedRef = useRef(false);
   const [muted, setMuted] = useState(false);
-  const [visual, setVisual] = useState<"video" | "frames">("video");
+  const [visual, setVisual] = useState<HeroVisual>("poster");
   const [posterSrc, setPosterSrc] = useState("/frames/desktop/0001.webp");
   const [reduced, setReduced] = useState(false);
   const [ready, setReady] = useState(false);
@@ -154,7 +173,7 @@ export function FrameSequence({
     node.playsInline = true;
   }, []);
 
-  const showVisual = useCallback((next: "video" | "frames") => {
+  const showVisual = useCallback((next: HeroVisual) => {
     if (visualRef.current === next) return;
     visualRef.current = next;
     setVisual(next);
@@ -236,12 +255,12 @@ export function FrameSequence({
       if (notify) onProgress?.(clamped);
       // The resting hero is a real <video>. Painting frames under it at 24fps
       // is what stalled the first loops.
-      if (!notify && visualRef.current === "video") return;
+      if (!notify && visualRef.current !== "frames") return;
       if (paintRafRef.current) return;
       paintRafRef.current = requestAnimationFrame(() => {
         paintRafRef.current = 0;
         const scrubbing = performance.now() < scrubUntilRef.current && scrollDrivenRef.current;
-        if (!scrubbing && visualRef.current === "video") return;
+        if (!scrubbing && visualRef.current !== "frames") return;
         const manifest = manifestRef.current;
         if (!manifest) return;
         const count = manifest.variants[variantRef.current].frameCount;
@@ -362,16 +381,11 @@ export function FrameSequence({
       setLastFrameSrc(frameUrl(prefix, count));
 
       const video = videoRef.current;
-      const soundtrack = manifest.source || DEFAULT_SOUNDTRACK;
       if (video && !prefersReducedMotion()) {
         video.loop = true;
         if (!soundUnlockedRef.current) video.muted = true;
-        if (video.src !== soundtrack) video.src = soundtrack;
+        if (video.src !== HERO_VIDEO_URL) video.src = HERO_VIDEO_URL;
         videoFailedRef.current = false;
-        void video.play().catch((error: unknown) => {
-          const name = error instanceof DOMException ? error.name : "";
-          if (name !== "AbortError" && name !== "NotAllowedError") videoFailedRef.current = true;
-        });
       }
 
       imagesRef.current = Array.from({ length: count }, () => null);
@@ -416,7 +430,7 @@ export function FrameSequence({
       // bytes only — turning all 239 into images here decodes them on the main
       // thread and stutters the video for the first few loops.
       if (video && !videoFailedRef.current) {
-        await waitForMedia(video, 2500);
+        await waitForMedia(video, 8000);
         if (cancelled) return;
       }
 
@@ -537,6 +551,7 @@ export function FrameSequence({
     const requestPlay = (progress: number) => {
       const video = videoRef.current;
       if (!video || videoFailedRef.current) return;
+      if (!primedRef.current && !canStartSmooth(video)) return;
       if (audioStateRef.current === "starting" || audioStateRef.current === "blocked") return;
       if (!video.paused) {
         audioStateRef.current = "playing";
@@ -593,22 +608,30 @@ export function FrameSequence({
         !video.paused &&
         video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA,
       );
+      if (video && canStartSmooth(video)) primedRef.current = true;
 
       if (!pinActive) {
         if (video && !video.paused) video.pause();
       } else if (scrubbing) {
         wasScrubbing = true;
         if (video && !video.paused) video.pause();
-      } else if (video && !videoFailedRef.current && (videoPlaying || now - startedAt < 4000)) {
+      } else if (
+        video &&
+        !videoFailedRef.current &&
+        primedRef.current &&
+        (videoPlaying || canStartSmooth(video))
+      ) {
         if (wasScrubbing) {
           wasScrubbing = false;
           audioStateRef.current = "idle";
           seekVideo(progressRef.current);
         }
-        showVisual("video");
+        if (videoPlaying) showVisual("video");
         scrollDrivenRef.current = false;
         if (video.paused) requestPlay(progressRef.current);
         else if (video.duration > 0) progressRef.current = video.currentTime / video.duration;
+      } else if (video && !videoFailedRef.current && now - startedAt < 8000) {
+        showVisual("poster");
       } else {
         showVisual("frames");
         wasScrubbing = false;
@@ -663,17 +686,26 @@ export function FrameSequence({
               ref={assignVideo}
               className={`pointer-events-none absolute inset-0 h-full w-full ${
                 fit === "contain" ? "object-contain" : "object-cover"
-              } ${visual === "video" ? "opacity-100" : "opacity-0"}`}
+              } ${visual === "frames" ? "opacity-0" : "opacity-100"}`}
+              src={HERO_VIDEO_URL}
               poster={posterSrc}
               playsInline
               loop
               preload="auto"
-              autoPlay
+              fetchPriority="high"
               aria-hidden
+            />
+            <img
+              src={posterSrc}
+              alt=""
+              fetchPriority="high"
+              className={`pointer-events-none absolute inset-0 h-full w-full ${
+                fit === "contain" ? "object-contain" : "object-cover"
+              } ${visual === "poster" ? "" : "invisible"}`}
             />
             <canvas
               ref={canvasRef}
-              className={`absolute inset-0 block h-full w-full ${visual === "video" ? "invisible" : ""}`}
+              className={`absolute inset-0 block h-full w-full ${visual === "frames" ? "" : "invisible"}`}
               aria-hidden
             />
           </>
