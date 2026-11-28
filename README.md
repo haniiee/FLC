@@ -1,64 +1,75 @@
 # FLC
 
-اپ کلاسی **آکادمی فروغ ماه تابان** — monorepo اسکلت (api + web + packages).
+اپ کلاسی **آکادمی فروغ ماه تابان** — monorepo (web + mobile + packages).
+
+## Production stack (گزینه ۲ — بومی Supabase)
+
+- **وب:** Vercel (`apps/web`) — فقط `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` (+ `SUPABASE_SERVICE_ROLE_KEY` سرور برای ادمین)
+- **بک‌اند:** Supabase Auth + Postgres/RLS + Storage + Realtime
+- **موبایل:** Expo با همان کلیدهای anon
+- **بدون** Render / Fastify در پروداکشن (`apps/api` فقط برای توسعهٔ لوکال اختیاری)
 
 ## پیش‌نیاز
 
-- Node.js 20 LTS (`.nvmrc`)
+- Node.js 20+ (`.nvmrc`)
 - [pnpm](https://pnpm.io/) 9+
-- Docker + Docker Compose
 
-## راه‌اندازی
+## راه‌اندازی وب (Supabase)
 
 ```bash
-# 1) وابستگی‌ها
 pnpm install
-
-# 2) env
 cp .env.example .env
-# وب Next از apps/web/.env می‌خواند (symlink به ریشه)
+# پر کردن NEXT_PUBLIC_SUPABASE_* و در صورت نیاز SUPABASE_SERVICE_ROLE_KEY
 ln -sfn ../../.env apps/web/.env
+pnpm --filter @app/web dev
+```
 
-# 3) زیرساخت لوکال (Postgres + MinIO + bucket class-files)
+Web: http://localhost:3000
+
+## توسعه لوکال با Fastify (اختیاری)
+
+```bash
 docker compose up -d
-
-# 4) توسعه
+pnpm --filter @app/api db:migrate
 pnpm dev
 ```
 
 - API: http://localhost:4000  
-- Web: http://localhost:3000  
-- MinIO console: http://localhost:9001 (`minioadmin` / `minioadmin`)
+- MinIO: http://localhost:9001 (`minioadmin` / `minioadmin`)
+
+برای fallback لوکال، `NEXT_PUBLIC_SUPABASE_URL` را خالی بگذار و `NEXT_PUBLIC_API_URL` را ست کن.
 
 ## دستورهای مفید
 
 ```bash
 pnpm typecheck
 pnpm lint
-pnpm --filter @app/api db:migrate
-pnpm --filter @app/api test
-pnpm --filter @app/api db:seed-teacher -- --phone 09121234567 --name "معلم" --password "password1"
-curl http://localhost:4000/health
-```
-
-برای تست‌ها دیتابیس `flc_test` و `DATABASE_URL_TEST` لازم است.
-
-```bash
-pnpm --filter @app/api storage:cors
+pnpm --filter @app/supabase-app typecheck
+pnpm --filter @app/web build
 ```
 
 ## ساختار
 
 ```
-apps/api        Fastify + Drizzle
-apps/web        Next.js (App Router) + Tailwind
-apps/mobile     فاز ۶ (Expo)
-packages/brand  design tokens + assets
+apps/web           Next.js (App Router) — کلاینت Supabase
+apps/mobile        Expo — همان مدل Auth/Storage/Realtime
+apps/api           Fastify (legacy / local only)
+packages/supabase-app   ApiClient روی @supabase/supabase-js
+packages/api-client     کلاینت HTTP به Fastify
 packages/shared-types
-packages/api-client
-packages/tsconfig
-packages/eslint-config
+packages/brand
+supabase/migrations    یادداشت/اسکریپت‌های RLS روی پروژهٔ Supabase
 ```
+
+## Env پروداکشن (Vercel)
+
+| Key | کجا |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | همه محیط‌ها |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | همه محیط‌ها |
+| `SUPABASE_SERVICE_ROLE_KEY` | فقط سرور (admin routes) — از Dashboard → Settings → API |
+| `NEXT_PUBLIC_LANDING_AUDIO_URL` | اختیاری |
+| `NEXT_PUBLIC_API_URL` | **ست نکن** در پروداکشن |
 
 ## برند
 
@@ -66,5 +77,3 @@ packages/eslint-config
 
 - `flc-logo.svg`
 - `icon-1024.png` / `icon-512.png` / `icon-192.png`
-
-برای favicon وب، `icon-192.png` را در `apps/web/public/icon-192.png` هم قرار دهید.

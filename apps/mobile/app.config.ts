@@ -98,9 +98,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     typedRoutes: true,
   },
   extra: {
-    apiUrl: process.env.EXPO_PUBLIC_API_URL ?? "http://10.0.2.2:4000",
+    // Legacy Fastify fallback only (unused when supabaseUrl + anon key are set)
+    apiUrl: process.env.EXPO_PUBLIC_API_URL,
+    supabaseUrl:
+      process.env.EXPO_PUBLIC_SUPABASE_URL ?? "https://gegmzokhmbxwjonyqmmz.supabase.co",
+    supabaseAnonKey:
+      process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdlZ216b2tobWJ4d2pvbnlxbW16Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU1ODAyMDcsImV4cCI6MjExMTE1NjIwN30.Ch2t8MRu2S1fFETd4gob1CbVGWE0X_bg2bF7CyuNc9w",
     eas: {
       projectId: process.env.EAS_PROJECT_ID,
     },
   },
 });
+

@@ -279,16 +279,33 @@ export type ApiClient = {
   deleteChatMessage: (messageId: string) => Promise<OkResponse>;
 };
 
+/** Bypass free-tunnel browser interstitial pages (Pinggy / localtunnel). */
+export function tunnelBypassHeaders(url: string): Record<string, string> {
+  try {
+    const host = new URL(url).hostname;
+    if (host.endsWith(".pinggy.net") || host.endsWith(".pinggy-free.link") || host.endsWith(".loca.lt")) {
+      return {
+        "X-Pinggy-No-Screen": "true",
+        "Bypass-Tunnel-Reminder": "true",
+      };
+    }
+  } catch {
+    // ignore invalid URL
+  }
+  return {};
+}
+
 function putWithProgress(
   url: string,
   blob: Blob,
   mimeType: string,
   onProgress?: (n: number) => void,
 ) {
+  const bypass = tunnelBypassHeaders(url);
   if (typeof XMLHttpRequest === "undefined" || !onProgress) {
     return fetch(url, {
       method: "PUT",
-      headers: { "content-type": mimeType },
+      headers: { "content-type": mimeType, ...bypass },
       body: blob,
     }).then((response) => {
       if (!response.ok) {
@@ -301,6 +318,9 @@ function putWithProgress(
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
     xhr.setRequestHeader("content-type", mimeType);
+    for (const [key, value] of Object.entries(bypass)) {
+      xhr.setRequestHeader(key, value);
+    }
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) {
         onProgress(event.loaded / event.total);
@@ -360,6 +380,7 @@ export function createApiClient(baseUrl: string, options: ApiClientOptions = {})
   ): Promise<T> {
     const headers: Record<string, string> = {
       Accept: "application/json",
+      ...tunnelBypassHeaders(normalizedBaseUrl),
     };
 
     if (requestOptions.body !== undefined) {
@@ -411,6 +432,7 @@ export function createApiClient(baseUrl: string, options: ApiClientOptions = {})
           headers: {
             Accept: "application/json",
             "Content-Type": "application/json",
+            ...tunnelBypassHeaders(normalizedBaseUrl),
           },
           body: JSON.stringify({ refreshToken: currentRefresh }),
         });

@@ -1,11 +1,12 @@
 "use client";
 
-import { ApiClientError } from "@app/api-client";
 import type { User } from "@app/shared-types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
-import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from "react";
 import { getApiClient } from "../lib/api";
+import { createBrowserSupabaseClient } from "../lib/supabase/browser";
+import { disconnectSocket } from "../realtime/socket";
 import { webTokenStore } from "../lib/token-store";
 
 type AuthContextValue = {
@@ -20,30 +21,26 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function fetchMe(): Promise<User | null> {
-  const refresh = await webTokenStore.getRefreshToken();
-  if (!refresh) {
-    return null;
-  }
-
-  // Ensure we have an access token (refresh if needed)
-  if (!(await webTokenStore.getAccessToken())) {
-    try {
-      await getApiClient().refresh(refresh);
-    } catch {
-      await webTokenStore.clear();
-      return null;
-    }
-  }
-
   try {
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      const supabase = createBrowserSupabaseClient();
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) return null;
+      if (data.session.access_token && data.session.refresh_token) {
+        await webTokenStore.setTokens({
+          accessToken: data.session.access_token,
+          refreshToken: data.session.refresh_token,
+        });
+      }
+    } else {
+      const refresh = await webTokenStore.getRefreshToken();
+      if (!refresh) return null;
+    }
     const me = await getApiClient().me();
     return me.user;
-  } catch (error) {
-    if (error instanceof ApiClientError && error.status === 401) {
-      await webTokenStore.clear();
-      return null;
-    }
-    throw error;
+  } catch {
+    await webTokenStore.clear();
+    return null;
   }
 }
 
@@ -58,6 +55,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     retry: false,
     staleTime: 30_000,
   });
+
+  useEffect(() => {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
+    const supabase = createBrowserSupabaseClient();
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.access_token && session.refresh_token) {
+        void webTokenStore.setTokens({
+          accessToken: session.access_token,
+          refreshToken: session.refresh_token,
+        });
+      }
+      void queryClient.invalidateQueries({ queryKey: ["me"] });
+    });
+    return () => data.subscription.unsubscribe();
+  }, [queryClient]);
 
   const refreshUser = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: ["me"] });
@@ -75,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       await webTokenStore.clear();
     }
+    disconnectSocket();
     queryClient.clear();
     if (pathname !== "/login") {
       router.replace(`/login?next=${encodeURIComponent(pathname)}`);
@@ -98,8 +111,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 }

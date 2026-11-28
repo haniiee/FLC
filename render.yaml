@@ -1,3 +1,5 @@
+# DEPRECATED: FLC production is Supabase-native (Vercel web + Supabase Auth/DB/Storage/Realtime).
+# This Render API blueprint is kept only for optional legacy Fastify deploys.
 services:
   - type: web
     name: flc-api

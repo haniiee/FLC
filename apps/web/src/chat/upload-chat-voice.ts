@@ -1,4 +1,5 @@
 import type { ChatMessage } from "@app/shared-types";
+import { tunnelBypassHeaders } from "@app/api-client";
 import { getApiClient } from "../lib/api";
 import { baseMimeType } from "../recorder/pick-mime";
 
@@ -12,6 +13,9 @@ function putWithProgress(
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
     xhr.setRequestHeader("content-type", contentType);
+    for (const [key, value] of Object.entries(tunnelBypassHeaders(url))) {
+      xhr.setRequestHeader(key, value);
+    }
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable && onProgress) {
         onProgress(event.loaded / event.total);
