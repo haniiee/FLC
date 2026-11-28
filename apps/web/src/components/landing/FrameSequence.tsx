@@ -79,10 +79,24 @@ function drawFrame(
 function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.decoding = "async";
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error(`Failed to load ${url}`));
     img.src = url;
+  });
+}
+
+function waitForMedia(video: HTMLVideoElement, ms: number): Promise<void> {
+  if (video.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = () => {
+      window.clearTimeout(timer);
+      video.removeEventListener("canplaythrough", done);
+      video.removeEventListener("error", done);
+      resolve();
+    };
+    const timer = window.setTimeout(done, ms);
+    video.addEventListener("canplaythrough", done);
+    video.addEventListener("error", done);
   });
 }
 
@@ -104,6 +118,7 @@ export function FrameSequence({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imagesRef = useRef<(HTMLImageElement | null)[]>([]);
   const loadedRef = useRef<Set<number>>(new Set());
+  const inflightRef = useRef<Map<number, Promise<HTMLImageElement | null>>>(new Map());
   const drawnIndexRef = useRef(-1);
   const paintRafRef = useRef(0);
   const progressRef = useRef(0);
@@ -112,17 +127,38 @@ export function FrameSequence({
   const manifestRef = useRef<FramesManifest | null>(null);
   const scrubUntilRef = useRef(0);
   const stRef = useRef<ScrollTrigger | null>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const audioStateRef = useRef<"idle" | "starting" | "blocked" | "playing">("idle");
   const scrollDrivenRef = useRef(false);
+  const soundUnlockedRef = useRef(false);
+  const videoFailedRef = useRef(false);
   const mutedRef = useRef(false);
+  const visualRef = useRef<"video" | "frames">("video");
   const [muted, setMuted] = useState(false);
+  const [visual, setVisual] = useState<"video" | "frames">("video");
+  const [posterSrc, setPosterSrc] = useState("/frames/desktop/0001.webp");
   const [reduced, setReduced] = useState(false);
   const [ready, setReady] = useState(false);
   const [lastFrameSrc, setLastFrameSrc] = useState<string | null>(null);
   const [fit, setFit] = useState<FrameFit>("cover");
   const [bootGen, setBootGen] = useState(0);
   const laidOutRef = useRef(false);
+
+  const assignVideo = useCallback((node: HTMLVideoElement | null) => {
+    videoRef.current = node;
+    if (!node) return;
+    // Muted has to be set before play(), and it must not be a React prop or the
+    // next render snaps it back and kills autoplay.
+    node.defaultMuted = true;
+    node.muted = true;
+    node.playsInline = true;
+  }, []);
+
+  const showVisual = useCallback((next: "video" | "frames") => {
+    if (visualRef.current === next) return;
+    visualRef.current = next;
+    setVisual(next);
+  }, []);
 
   const resizeCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -143,19 +179,37 @@ export function FrameSequence({
     canvas.style.height = `${cssH}px`;
   }, []);
 
-  const nearestLoaded = useCallback((wanted: number) => {
+  // Hold the latest decoded frame at or before the playhead. Jumping ahead to a
+  // sparse keyframe is what made the first loops look like a stuttering video.
+  const frameAt = useCallback((wanted: number) => {
     const loaded = loadedRef.current;
     if (loaded.has(wanted)) return wanted;
-    let best = -1;
-    let bestDist = Number.POSITIVE_INFINITY;
-    for (const idx of loaded) {
-      const dist = Math.abs(idx - wanted);
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = idx;
-      }
+    for (let i = wanted - 1; i >= 0; i--) {
+      if (loaded.has(i)) return i;
     }
-    return best;
+    return -1;
+  }, []);
+
+  const ensureImage = useCallback((index0: number) => {
+    const existing = imagesRef.current[index0];
+    if (existing) return Promise.resolve(existing);
+    const inflight = inflightRef.current.get(index0);
+    if (inflight) return inflight;
+    const manifest = manifestRef.current;
+    if (!manifest) return Promise.resolve(null);
+    const prefix = manifest.variants[variantRef.current].pathPrefix;
+    const promise = loadImage(frameUrl(prefix, index0 + 1))
+      .then((img) => {
+        imagesRef.current[index0] = img;
+        loadedRef.current.add(index0);
+        return img;
+      })
+      .catch(() => null)
+      .finally(() => {
+        inflightRef.current.delete(index0);
+      });
+    inflightRef.current.set(index0, promise);
+    return promise;
   }, []);
 
   const paint = useCallback((index: number) => {
@@ -180,9 +234,14 @@ export function FrameSequence({
       const clamped = Math.min(1, Math.max(0, progress));
       progressRef.current = clamped;
       if (notify) onProgress?.(clamped);
+      // The resting hero is a real <video>. Painting frames under it at 24fps
+      // is what stalled the first loops.
+      if (!notify && visualRef.current === "video") return;
       if (paintRafRef.current) return;
       paintRafRef.current = requestAnimationFrame(() => {
         paintRafRef.current = 0;
+        const scrubbing = performance.now() < scrubUntilRef.current && scrollDrivenRef.current;
+        if (!scrubbing && visualRef.current === "video") return;
         const manifest = manifestRef.current;
         if (!manifest) return;
         const count = manifest.variants[variantRef.current].frameCount;
@@ -190,11 +249,57 @@ export function FrameSequence({
           count - 1,
           Math.max(0, Math.round(progressRef.current * (count - 1))),
         );
-        const idx = nearestLoaded(wanted);
-        if (idx >= 0) paint(idx);
+        const loaded = loadedRef.current;
+        if (loaded.has(wanted)) {
+          showVisual("frames");
+          paint(wanted);
+        } else if (scrubbing) {
+          const video = videoRef.current;
+          if (
+            video &&
+            !videoFailedRef.current &&
+            Number.isFinite(video.duration) &&
+            video.duration > 0
+          ) {
+            showVisual("video");
+            const target = Math.min(progressRef.current * video.duration, video.duration - 0.05);
+            if (Math.abs(video.currentTime - target) > 0.08) video.currentTime = target;
+          } else {
+            const idx = frameAt(wanted);
+            if (idx >= 0) {
+              showVisual("frames");
+              paint(idx);
+            }
+          }
+        } else {
+          const idx = frameAt(wanted);
+          if (idx >= 0) paint(idx);
+        }
+
+        if (!scrubbing && visualRef.current !== "frames") return;
+        let start = scrubbing ? wanted : 0;
+        if (!scrubbing) {
+          while (start < count && loaded.has(start)) start += 1;
+        }
+        for (let i = start; i < Math.min(count, start + 6); i++) {
+          if (loaded.has(i)) continue;
+          void ensureImage(i).then((img) => {
+            if (!img) return;
+            const stillScrubbing =
+              performance.now() < scrubUntilRef.current && scrollDrivenRef.current;
+            if (!stillScrubbing && visualRef.current !== "frames") return;
+            const current = Math.min(
+              count - 1,
+              Math.max(0, Math.round(progressRef.current * (count - 1))),
+            );
+            if (!loadedRef.current.has(current)) return;
+            if (stillScrubbing) showVisual("frames");
+            paint(current);
+          });
+        }
       });
     },
-    [nearestLoaded, onProgress, paint],
+    [ensureImage, frameAt, onProgress, paint, showVisual],
   );
 
   const markScrubbing = useCallback(() => {
@@ -249,18 +354,25 @@ export function FrameSequence({
       if (cancelled) return;
       manifestRef.current = manifest;
 
-      const soundtrack = audioRef.current;
-      if (soundtrack) {
-        soundtrack.src = manifest.source || DEFAULT_SOUNDTRACK;
-        soundtrack.loop = true;
-        soundtrack.muted = mutedRef.current;
-      }
-
       const activeVariant = variantRef.current;
       const meta = manifest.variants[activeVariant];
       const count = meta.frameCount;
       const prefix = meta.pathPrefix;
+      setPosterSrc(frameUrl(prefix, 1));
       setLastFrameSrc(frameUrl(prefix, count));
+
+      const video = videoRef.current;
+      const soundtrack = manifest.source || DEFAULT_SOUNDTRACK;
+      if (video && !prefersReducedMotion()) {
+        video.loop = true;
+        if (!soundUnlockedRef.current) video.muted = true;
+        if (video.src !== soundtrack) video.src = soundtrack;
+        videoFailedRef.current = false;
+        void video.play().catch((error: unknown) => {
+          const name = error instanceof DOMException ? error.name : "";
+          if (name !== "AbortError" && name !== "NotAllowedError") videoFailedRef.current = true;
+        });
+      }
 
       imagesRef.current = Array.from({ length: count }, () => null);
       loadedRef.current = new Set();
@@ -276,13 +388,14 @@ export function FrameSequence({
             resizeCanvas();
             paint(0);
             setReady(true);
-          } else {
-            const wanted = Math.min(
-              count - 1,
-              Math.max(0, Math.round(progressRef.current * (count - 1))),
-            );
-            if (nearestLoaded(wanted) === index0) paint(index0);
+            return;
           }
+          if (visualRef.current !== "frames") return;
+          const wanted = Math.min(
+            count - 1,
+            Math.max(0, Math.round(progressRef.current * (count - 1))),
+          );
+          if (frameAt(wanted) === index0) paint(index0);
         } catch {
           // skip failed frame
         }
@@ -290,6 +403,7 @@ export function FrameSequence({
 
       await ingest(0);
       if (cancelled) return;
+      setReady(true);
 
       if (prefersReducedMotion()) {
         await ingest(count - 1);
@@ -298,22 +412,33 @@ export function FrameSequence({
         return;
       }
 
-      const stride = 8;
-      const coarse: number[] = [];
-      for (let i = stride; i < count; i += stride) coarse.push(i);
-      if (!coarse.includes(count - 1)) coarse.push(count - 1);
-      await Promise.all(coarse.map((i) => ingest(i)));
-      if (cancelled) return;
-
-      const rest: number[] = [];
-      for (let i = 1; i < count; i++) {
-        if (!loadedRef.current.has(i)) rest.push(i);
-      }
-      const batch = 12;
-      for (let i = 0; i < rest.length; i += batch) {
+      // Let the single mp4 take the connection first. Fetch the scrub frames as
+      // bytes only — turning all 239 into images here decodes them on the main
+      // thread and stutters the video for the first few loops.
+      if (video && !videoFailedRef.current) {
+        await waitForMedia(video, 2500);
         if (cancelled) return;
-        await Promise.all(rest.slice(i, i + batch).map((idx) => ingest(idx)));
       }
+
+      const pending = new Set<number>();
+      let cursor = 0;
+      async function worker() {
+        for (;;) {
+          if (cancelled) return;
+          while (cursor < count && pending.has(cursor)) cursor += 1;
+          if (cursor >= count) return;
+          const index = cursor;
+          cursor += 1;
+          pending.add(index);
+          try {
+            await fetch(frameUrl(prefix, index + 1), { cache: "force-cache" });
+          } catch {
+            // scrub will retry through loadImage
+          }
+        }
+      }
+
+      await Promise.all([worker(), worker()]);
     }
 
     void boot().catch(() => {
@@ -332,7 +457,7 @@ export function FrameSequence({
       window.removeEventListener("resize", onResize);
       if (paintRafRef.current) cancelAnimationFrame(paintRafRef.current);
     };
-  }, [bootGen, nearestLoaded, paint, resizeCanvas, schedulePaintFromProgress]);
+  }, [bootGen, frameAt, paint, resizeCanvas, schedulePaintFromProgress]);
 
   // Pin + scroll scrub
   useEffect(() => {
@@ -357,6 +482,7 @@ export function FrameSequence({
         if (scrubbing || Math.abs(self.getVelocity()) > 8) {
           markScrubbing();
           scrollDrivenRef.current = true;
+          videoRef.current?.pause();
           schedulePaintFromProgress(self.progress, true);
         }
       },
@@ -382,41 +508,45 @@ export function FrameSequence({
     };
   }, [fit, markScrubbing, ready, reduced, schedulePaintFromProgress]);
 
-  // Autoplay loop — runs when not scrubbing and pin section is in view.
-  // The soundtrack is the clock once the browser allows playback; frames keep
-  // advancing on their own until then.
+  // Resting playback is the mp4 itself. Canvas frames are only for scroll scrub,
+  // and only if the video never becomes playable.
   useEffect(() => {
     if (reduced || !ready) return;
     const manifest = manifestRef.current;
     if (!manifest) return;
 
     const meta = manifest.variants[variantRef.current];
-    const durationSec = Math.max(0.1, (meta.frameCount - 1) / meta.fps);
+    const count = meta.frameCount;
+    const durationSec = Math.max(0.1, (count - 1) / meta.fps);
+    const startedAt = performance.now();
     let raf = 0;
     let last = performance.now();
     let playGen = 0;
+    let wasScrubbing = false;
 
-    const seekAudio = (progress: number) => {
-      const audio = audioRef.current;
-      if (!audio || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
+    const seekVideo = (progress: number) => {
+      const video = videoRef.current;
+      if (!video || !Number.isFinite(video.duration) || video.duration <= 0) return;
       const target = Math.min(
-        Math.max(0, progress) * audio.duration,
-        Math.max(0, audio.duration - 0.05),
+        Math.max(0, progress) * video.duration,
+        Math.max(0, video.duration - 0.05),
       );
-      if (Math.abs(audio.currentTime - target) > 0.12) {
-        audio.currentTime = target;
-      }
+      if (Math.abs(video.currentTime - target) > 0.12) video.currentTime = target;
     };
 
     const requestPlay = (progress: number) => {
-      const audio = audioRef.current;
-      if (!audio || audioStateRef.current === "starting" || audioStateRef.current === "blocked")
+      const video = videoRef.current;
+      if (!video || videoFailedRef.current) return;
+      if (audioStateRef.current === "starting" || audioStateRef.current === "blocked") return;
+      if (!video.paused) {
+        audioStateRef.current = "playing";
         return;
-      if (!audio.paused && audioStateRef.current === "playing") return;
+      }
       const gen = ++playGen;
       audioStateRef.current = "starting";
-      seekAudio(progress);
-      void audio.play().then(
+      if (!soundUnlockedRef.current) video.muted = true;
+      seekVideo(progress);
+      void video.play().then(
         () => {
           if (gen === playGen) audioStateRef.current = "playing";
         },
@@ -424,14 +554,24 @@ export function FrameSequence({
           if (gen !== playGen) return;
           const name = error instanceof DOMException ? error.name : "";
           // Pause during a scroll scrub aborts play(); the gesture itself was allowed.
-          audioStateRef.current = name === "AbortError" ? "playing" : "blocked";
+          if (name === "AbortError") {
+            audioStateRef.current = "playing";
+            return;
+          }
+          audioStateRef.current = "blocked";
+          if (name !== "NotAllowedError") videoFailedRef.current = true;
         },
       );
     };
 
-    const unlock = () => {
-      const audio = audioRef.current;
-      if (!audio || (!audio.paused && audioStateRef.current === "playing")) return;
+    const unlock = (event: Event) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest("[data-hero-mute]")) return;
+      const video = videoRef.current;
+      if (!video || videoFailedRef.current) return;
+      soundUnlockedRef.current = true;
+      video.muted = mutedRef.current;
+      if (!video.paused) return;
       audioStateRef.current = "idle";
       requestPlay(progressRef.current);
     };
@@ -446,28 +586,44 @@ export function FrameSequence({
       const scrubbing = now < scrubUntilRef.current && scrollDrivenRef.current;
       const st = stRef.current;
       const pinActive = st?.isActive ?? true;
-      const audio = audioRef.current;
-      const audioClock =
-        audio && !audio.paused && Number.isFinite(audio.duration) && audio.duration > 0;
+      const video = videoRef.current;
+      const videoPlaying = Boolean(
+        video &&
+        !videoFailedRef.current &&
+        !video.paused &&
+        video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA,
+      );
 
       if (!pinActive) {
-        if (audio && !audio.paused) audio.pause();
+        if (video && !video.paused) video.pause();
       } else if (scrubbing) {
-        if (audio && !audio.paused) audio.pause();
-      } else if (audioClock && audio) {
-        scrollDrivenRef.current = false;
-        schedulePaintFromProgress(audio.currentTime / audio.duration);
-      } else {
-        let next = progressRef.current + dt / durationSec;
-        if (next >= 1) next -= Math.floor(next);
-        schedulePaintFromProgress(next);
-        if (
-          audioStateRef.current === "idle" ||
-          (audioStateRef.current === "playing" && audio?.paused)
-        ) {
-          scrollDrivenRef.current = false;
-          requestPlay(next);
+        wasScrubbing = true;
+        if (video && !video.paused) video.pause();
+      } else if (video && !videoFailedRef.current && (videoPlaying || now - startedAt < 4000)) {
+        if (wasScrubbing) {
+          wasScrubbing = false;
+          audioStateRef.current = "idle";
+          seekVideo(progressRef.current);
         }
+        showVisual("video");
+        scrollDrivenRef.current = false;
+        if (video.paused) requestPlay(progressRef.current);
+        else if (video.duration > 0) progressRef.current = video.currentTime / video.duration;
+      } else {
+        showVisual("frames");
+        wasScrubbing = false;
+        let prefix = 0;
+        while (prefix < count && loadedRef.current.has(prefix)) prefix += 1;
+        let next = progressRef.current + dt / durationSec;
+        if (prefix >= count) {
+          if (next >= 1) next -= Math.floor(next);
+        } else if (prefix > 0) {
+          const maxProgress = (prefix - 1) / Math.max(1, count - 1);
+          if (next > maxProgress) next = maxProgress;
+        } else {
+          next = 0;
+        }
+        schedulePaintFromProgress(next);
       }
 
       raf = requestAnimationFrame(tick);
@@ -479,10 +635,10 @@ export function FrameSequence({
       cancelAnimationFrame(raf);
       window.removeEventListener("pointerdown", unlock);
       window.removeEventListener("keydown", unlock);
-      audioRef.current?.pause();
+      videoRef.current?.pause();
       audioStateRef.current = "idle";
     };
-  }, [ready, reduced, schedulePaintFromProgress]);
+  }, [ready, reduced, schedulePaintFromProgress, showVisual]);
 
   return (
     <div data-fit={fit} className="group/hero w-full bg-[#070D1F]">
@@ -502,17 +658,40 @@ export function FrameSequence({
             <img src={lastFrameSrc} alt="" className="h-full w-full object-cover" />
           ) : null
         ) : (
-          <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full" aria-hidden />
+          <>
+            <video
+              ref={assignVideo}
+              className={`pointer-events-none absolute inset-0 h-full w-full ${
+                fit === "contain" ? "object-contain" : "object-cover"
+              } ${visual === "video" ? "opacity-100" : "opacity-0"}`}
+              poster={posterSrc}
+              playsInline
+              loop
+              preload="auto"
+              autoPlay
+              aria-hidden
+            />
+            <canvas
+              ref={canvasRef}
+              className={`absolute inset-0 block h-full w-full ${visual === "video" ? "invisible" : ""}`}
+              aria-hidden
+            />
+          </>
         )}
-        <audio ref={audioRef} preload="auto" loop hidden muted={muted} />
         {reduced ? null : (
           <button
             type="button"
+            data-hero-mute
             onClick={() => {
               setMuted((current) => {
                 const next = !current;
                 mutedRef.current = next;
-                if (audioRef.current) audioRef.current.muted = next;
+                soundUnlockedRef.current = true;
+                const video = videoRef.current;
+                if (video) {
+                  video.muted = next;
+                  if (!next && video.paused) void video.play();
+                }
                 return next;
               });
             }}
